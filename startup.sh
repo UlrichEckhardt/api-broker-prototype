@@ -1,5 +1,5 @@
-# name for the Docker network
-BROKER_NETWORK=api-broker-prototype
+# read configuration
+source config.sh
 
 # image name for the MongoDB server
 MONGODB_IMAGE=mongo:4.2

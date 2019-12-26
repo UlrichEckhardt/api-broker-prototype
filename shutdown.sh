@@ -1,5 +1,5 @@
-# name for the Docker network
-BROKER_NETWORK=api-broker-prototype
+# read configuration
+source config.sh
 
 docker stop mongodb
 
