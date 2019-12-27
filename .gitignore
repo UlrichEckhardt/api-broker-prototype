@@ -1,3 +1,5 @@
 # IDE artifacts
 .vscode/
 
+# Go module artifact
+go.sum
