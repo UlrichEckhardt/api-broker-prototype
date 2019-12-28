@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -37,4 +38,14 @@ func main() {
 		fmt.Println(err)
 		return
 	}
+
+	events := client.Database("test").Collection("events")
+
+	res, err := events.InsertOne(ctx, bson.M{"hello": "world"})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(res.InsertedID)
 }
