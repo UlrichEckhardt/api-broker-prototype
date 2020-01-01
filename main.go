@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -12,6 +14,20 @@ import (
 
 func main() {
 	defer fmt.Println("Done.")
+
+	startAfter := flag.String("start-after", "", "Start processing after the event with this ID.")
+	flag.Parse()
+	fmt.Println(*startAfter)
+	var lastProcessed *primitive.ObjectID
+	if *startAfter != "" {
+		lp, err := primitive.ObjectIDFromHex(*startAfter)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		lastProcessed = &lp
+	}
+	fmt.Println("starting at", lastProcessed)
 
 	opts := options.Client().ApplyURI("mongodb://localhost").SetAppName("api-broker-prototype").SetConnectTimeout(1 * time.Second)
 	err := opts.Validate()
