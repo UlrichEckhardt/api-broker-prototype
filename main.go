@@ -62,6 +62,7 @@ func main() {
 	}
 
 	events := client.Database("test").Collection("events")
+	notifications := client.Database("test").Collection("notifications")
 
 	var doc Envelope
 	doc.Payload = bson.M{"answer": 42}
@@ -76,4 +77,46 @@ func main() {
 		return
 	}
 	fmt.Println(id)
+
+	// iterate over existing events
+	for {
+		envelope, err := getNextDocument(lastProcessed, events, notifications)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		if envelope == nil {
+			break
+		}
+		fmt.Println("loaded envelope", envelope.ID.Hex())
+		fmt.Println("payload", envelope.Payload)
+
+		// move to next element
+		lastProcessed = &envelope.ID
+	}
+}
+
+func getNextDocument(lastProcessed *primitive.ObjectID, events *mongo.Collection, notifications *mongo.Collection) (*Envelope, error) {
+	var filter interface{}
+	if lastProcessed == nil {
+		filter = bson.M{}
+	} else {
+		filter = bson.M{"_id": bson.M{"$gt": lastProcessed}}
+	}
+
+	res := events.FindOne(nil, filter)
+	if res.Err() == mongo.ErrNoDocuments {
+		// not an error, there are no more documents left
+		return nil, nil
+	}
+	if res.Err() != nil {
+		return nil, res.Err()
+	}
+
+	var envelope Envelope
+	if err := res.Decode(&envelope); err != nil {
+		return nil, err
+	}
+
+	return &envelope, nil
 }
