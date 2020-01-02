@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+//Envelope .
+type Envelope struct {
+	ID      primitive.ObjectID `bson:"_id,omitempty"`
+	Payload bson.M             `bson:"payload"`
+}
+
 func main() {
 	defer fmt.Println("Done.")
 
@@ -57,11 +63,17 @@ func main() {
 
 	events := client.Database("test").Collection("events")
 
-	res, err := events.InsertOne(ctx, bson.M{"hello": "world"})
+	var doc Envelope
+	doc.Payload = bson.M{"answer": 42}
+	res, err := events.InsertOne(ctx, doc)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-
-	fmt.Println(res.InsertedID)
+	id, ok := res.InsertedID.(primitive.ObjectID)
+	if !ok {
+		fmt.Println("no ID returned from insert")
+		return
+	}
+	fmt.Println(id)
 }
