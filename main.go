@@ -15,6 +15,7 @@ import (
 //Envelope .
 type Envelope struct {
 	ID      primitive.ObjectID `bson:"_id,omitempty"`
+	Created primitive.DateTime `bson:"created"`
 	Payload bson.M             `bson:"payload"`
 }
 
@@ -65,6 +66,7 @@ func main() {
 	notifications := client.Database("test").Collection("notifications")
 
 	var doc Envelope
+	doc.Created = primitive.NewDateTimeFromTime(time.Now())
 	doc.Payload = bson.M{"answer": 42}
 	res, err := events.InsertOne(ctx, doc)
 	if err != nil {
@@ -89,6 +91,7 @@ func main() {
 			break
 		}
 		fmt.Println("loaded envelope", envelope.ID.Hex())
+		fmt.Println("created", envelope.Created.Time().Format(time.RFC3339))
 		fmt.Println("payload", envelope.Payload)
 
 		// move to next element
