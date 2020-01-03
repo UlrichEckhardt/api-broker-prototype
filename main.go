@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
+	"github.com/urfave/cli/v2" // imports as package "cli"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"os"
 	"time"
 )
 
@@ -19,52 +20,54 @@ type Envelope struct {
 }
 
 func main() {
-	defer fmt.Println("Done.")
+	app := cli.App{
+		Name:  "api-broker-prototype",
+		Usage: "prototype for an event-sourcing inspired API binding",
+		Commands: []*cli.Command{
+			{
+				Name:      "insert",
+				Usage:     "Insert an event into the store.",
+				ArgsUsage: "<event>",
+				Action: func(c *cli.Context) error {
+					args := c.Args()
+					if args.Len() != 1 {
+						return errors.New("exactly one argument expected")
+					}
+					return insertMain(args.First())
+				},
+			},
+			{
+				Name:      "process",
+				Usage:     "process events from the store",
+				ArgsUsage: " ", // no arguments expected
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "start-after",
+						Value: "",
+						Usage: "`ID` of the event after which to start processing",
+					},
+				},
+				Action: func(c *cli.Context) error {
+					if c.NArg() > 0 {
+						return errors.New("no arguments expected")
+					}
 
-	flag.Parse()
-	cmd := ""
-	if flag.NArg() > 0 {
-		cmd = flag.Arg(0)
+					var lastProcessed primitive.ObjectID
+					if processStartAfter := c.String("start-after"); processStartAfter != "" {
+						lp, err := primitive.ObjectIDFromHex(processStartAfter)
+						if err != nil {
+							return err
+						}
+						lastProcessed = lp
+					}
+					return processMain(lastProcessed)
+				},
+			},
+		},
 	}
-	insertCmd := "insert"
-	processCmd := "process"
-	switch cmd {
-	case insertCmd:
-		// commandline API for inserting events
-		insertFlags := flag.NewFlagSet(insertCmd, flag.ExitOnError)
 
-		insertFlags.Parse(flag.Args()[1:])
-		fmt.Println("subcommand", cmd)
-		if insertFlags.NArg() != 1 {
-			fmt.Println("exactly one argument expected")
-			return
-		}
-		if err := insertMain(insertFlags.Arg(0)); err != nil {
-			fmt.Println(err)
-			return
-		}
-	case processCmd:
-		// commandline API for processing of events
-		processFlags := flag.NewFlagSet(processCmd, flag.ExitOnError)
-		processStartAfter := processFlags.String("start-after", "", "Start processing after the event with this ID.")
-		processFlags.Parse(flag.Args()[1:])
-		fmt.Println("subcommand", cmd)
-		var lastProcessed primitive.ObjectID
-		if *processStartAfter != "" {
-			lp, err := primitive.ObjectIDFromHex(*processStartAfter)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			lastProcessed = lp
-		}
-
-		if err := processMain(lastProcessed); err != nil {
-			fmt.Println(err)
-			return
-		}
-	default:
-		fmt.Println("expected 'insert' or 'process' subcommands")
+	if err := app.Run(os.Args); err != nil {
+		fmt.Println(err)
 		return
 	}
 }
