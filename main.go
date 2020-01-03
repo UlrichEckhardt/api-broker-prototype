@@ -7,8 +7,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"time"
 )
 
@@ -36,39 +34,12 @@ func main() {
 	}
 	fmt.Println("starting at", lastProcessed)
 
-	opts := options.Client().ApplyURI("mongodb://localhost").SetAppName("api-broker-prototype").SetConnectTimeout(1 * time.Second)
-	err := opts.Validate()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	client, err := mongo.NewClient(opts)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
-	if err := client.Connect(ctx); err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	if err := client.Ping(ctx, readpref.Primary()); err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	events := client.Database("test").Collection("events")
-	notifications := client.Database("test").Collection("notifications")
+	events, notifications, err := Connect()
 
 	var doc Envelope
 	doc.Created = primitive.NewDateTimeFromTime(time.Now())
 	doc.Payload = bson.M{"answer": 42}
-	res, err := events.InsertOne(ctx, doc)
+	res, err := events.InsertOne(context.Background(), doc)
 	if err != nil {
 		fmt.Println(err)
 		return
