@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"go.mongodb.org/mongo-driver/bson"
@@ -23,33 +24,26 @@ func main() {
 	startAfter := flag.String("start-after", "", "Start processing after the event with this ID.")
 	flag.Parse()
 	fmt.Println(*startAfter)
-	var lastProcessed *primitive.ObjectID
+	var lastProcessed primitive.ObjectID
 	if *startAfter != "" {
 		lp, err := primitive.ObjectIDFromHex(*startAfter)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		lastProcessed = &lp
+		lastProcessed = lp
 	}
 	fmt.Println("starting at", lastProcessed)
 
 	events, notifications, err := Connect()
 
-	var doc Envelope
-	doc.Created = primitive.NewDateTimeFromTime(time.Now())
-	doc.Payload = bson.M{"answer": 42}
-	res, err := events.InsertOne(context.Background(), doc)
+	// insert an additional document
+	id, err := insertNewDocument(bson.M{"answer": 42}, events, notifications)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	id, ok := res.InsertedID.(primitive.ObjectID)
-	if !ok {
-		fmt.Println("no ID returned from insert")
-		return
-	}
-	fmt.Println(id)
+	fmt.Println("inserted new document", id.Hex())
 
 	// iterate over existing events
 	for {
@@ -66,13 +60,30 @@ func main() {
 		fmt.Println("payload", envelope.Payload)
 
 		// move to next element
-		lastProcessed = &envelope.ID
+		lastProcessed = envelope.ID
 	}
 }
 
-func getNextDocument(lastProcessed *primitive.ObjectID, events *mongo.Collection, notifications *mongo.Collection) (*Envelope, error) {
+func insertNewDocument(payload bson.M, events *mongo.Collection, notifications *mongo.Collection) (primitive.ObjectID, error) {
+	var doc Envelope
+	doc.Created = primitive.NewDateTimeFromTime(time.Now())
+	doc.Payload = payload
+
+	res, err := events.InsertOne(context.Background(), doc)
+	if err != nil {
+		return primitive.NilObjectID, err
+	}
+	id, ok := res.InsertedID.(primitive.ObjectID)
+	if !ok {
+		return primitive.NilObjectID, errors.New("no ID returned from insert")
+	}
+
+	return id, nil
+}
+
+func getNextDocument(lastProcessed primitive.ObjectID, events *mongo.Collection, notifications *mongo.Collection) (*Envelope, error) {
 	var filter interface{}
-	if lastProcessed == nil {
+	if lastProcessed.IsZero() {
 		filter = bson.M{}
 	} else {
 		filter = bson.M{"_id": bson.M{"$gt": lastProcessed}}
