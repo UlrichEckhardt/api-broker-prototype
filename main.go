@@ -21,36 +21,82 @@ type Envelope struct {
 func main() {
 	defer fmt.Println("Done.")
 
-	startAfter := flag.String("start-after", "", "Start processing after the event with this ID.")
 	flag.Parse()
-	fmt.Println(*startAfter)
-	var lastProcessed primitive.ObjectID
-	if *startAfter != "" {
-		lp, err := primitive.ObjectIDFromHex(*startAfter)
-		if err != nil {
+	cmd := ""
+	if flag.NArg() > 0 {
+		cmd = flag.Arg(0)
+	}
+	insertCmd := "insert"
+	processCmd := "process"
+	switch cmd {
+	case insertCmd:
+		// commandline API for inserting events
+		insertFlags := flag.NewFlagSet(insertCmd, flag.ExitOnError)
+
+		insertFlags.Parse(flag.Args()[1:])
+		fmt.Println("subcommand", cmd)
+		if insertFlags.NArg() != 1 {
+			fmt.Println("exactly one argument expected")
+			return
+		}
+		if err := insertMain(insertFlags.Arg(0)); err != nil {
 			fmt.Println(err)
 			return
 		}
-		lastProcessed = lp
-	}
-	fmt.Println("starting at", lastProcessed)
+	case processCmd:
+		// commandline API for processing of events
+		processFlags := flag.NewFlagSet(processCmd, flag.ExitOnError)
+		processStartAfter := processFlags.String("start-after", "", "Start processing after the event with this ID.")
+		processFlags.Parse(flag.Args()[1:])
+		fmt.Println("subcommand", cmd)
+		var lastProcessed primitive.ObjectID
+		if *processStartAfter != "" {
+			lp, err := primitive.ObjectIDFromHex(*processStartAfter)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			lastProcessed = lp
+		}
 
-	events, notifications, err := Connect()
-
-	// insert an additional document
-	id, err := insertNewDocument(bson.M{"answer": 42}, events, notifications)
-	if err != nil {
-		fmt.Println(err)
+		if err := processMain(lastProcessed); err != nil {
+			fmt.Println(err)
+			return
+		}
+	default:
+		fmt.Println("expected 'insert' or 'process' subcommands")
 		return
 	}
+}
+
+// insert a new event
+func insertMain(event string) error {
+	events, notifications, err := Connect()
+	if err != nil {
+		return err
+	}
+
+	// insert an additional document
+	id, err := insertNewDocument(bson.M{"event": event}, events, notifications)
+	if err != nil {
+		return err
+	}
 	fmt.Println("inserted new document", id.Hex())
+	return nil
+}
+
+// process existing elements
+func processMain(lastProcessed primitive.ObjectID) error {
+	events, notifications, err := Connect()
+	if err != nil {
+		return err
+	}
 
 	// iterate over existing events
 	for {
 		envelope, err := getNextDocument(lastProcessed, events, notifications)
 		if err != nil {
-			fmt.Println(err)
-			return
+			return err
 		}
 		if envelope == nil {
 			break
@@ -62,6 +108,8 @@ func main() {
 		// move to next element
 		lastProcessed = envelope.ID
 	}
+
+	return nil
 }
 
 func insertNewDocument(payload bson.M, events *mongo.Collection, notifications *mongo.Collection) (primitive.ObjectID, error) {
