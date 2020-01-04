@@ -98,24 +98,35 @@ func processMain(lastProcessed primitive.ObjectID) error {
 		return store.Error()
 	}
 
-	// iterate over existing events
-	for {
-		envelope := store.RetrieveNext(lastProcessed)
-		if store.Error() != nil {
-			return store.Error()
-		}
-		if envelope == nil {
-			break
-		}
-		fmt.Println("loaded envelope", envelope.ID.Hex())
-		fmt.Println("created", envelope.Created.Time().Format(time.RFC3339))
-		fmt.Println("payload", envelope.Payload)
+	ch := make(chan Envelope)
 
-		// move to next element
-		lastProcessed = envelope.ID
+	// run code to retrieve events in a goroutine
+	go func(id primitive.ObjectID, sink chan<- Envelope) {
+		defer close(sink)
+		for {
+			// retrieve next envelope
+			envelope := store.RetrieveNext(id)
+			if store.Error() != nil {
+				return
+			}
+			if envelope == nil {
+				break
+			}
+
+			// emit envelope
+			sink <- *envelope
+
+			// move to next element
+			id = envelope.ID
+		}
+	}(lastProcessed, ch)
+
+	// process events from the channel
+	for envelope := range ch {
+		fmt.Println("received event", envelope.ID.Hex(), envelope.Created.Time().Format(time.RFC3339), envelope.Payload)
 	}
 
-	return nil
+	return store.Error()
 }
 
 // EventStore represents the storage and retrieval of events. The content is
