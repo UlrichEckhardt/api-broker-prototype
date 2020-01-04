@@ -19,6 +19,11 @@ type Envelope struct {
 	Payload bson.M             `bson:"payload"`
 }
 
+// Notification just carries the ID of a persisted event.
+type Notification struct {
+	ID primitive.ObjectID `bson:"_id,omitempty"`
+}
+
 func main() {
 	app := cli.App{
 		Name:  "api-broker-prototype",
@@ -231,6 +236,15 @@ func (s *EventStore) Insert(ctx context.Context, env Envelope) primitive.ObjectI
 	id, ok := res.InsertedID.(primitive.ObjectID)
 	if !ok {
 		s.err = errors.New("no ID returned from insert")
+		return primitive.NilObjectID
+	}
+
+	// insert a notification with the created document's ID
+	var note Notification
+	note.ID = id
+	_, err = s.notifications.InsertOne(ctx, note)
+	if err != nil {
+		s.err = err
 		return primitive.NilObjectID
 	}
 
