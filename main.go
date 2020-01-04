@@ -166,28 +166,10 @@ func processMain(lastProcessed primitive.ObjectID) error {
 		return store.Error()
 	}
 
-	ch := make(chan Envelope)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// run code to retrieve events in a goroutine
-	go func(id primitive.ObjectID, sink chan<- Envelope) {
-		defer close(sink)
-		for {
-			// retrieve next envelope
-			envelope := store.RetrieveNext(context.Background(), id)
-			if store.Error() != nil {
-				return
-			}
-			if envelope == nil {
-				break
-			}
-
-			// emit envelope
-			sink <- *envelope
-
-			// move to next element
-			id = envelope.ID
-		}
-	}(lastProcessed, ch)
+	ch := store.FollowEvents(ctx, lastProcessed)
 
 	// process events from the channel
 	for envelope := range ch {
@@ -388,6 +370,65 @@ func (s *EventStore) LoadEvents(ctx context.Context, start primitive.ObjectID) <
 			if envelope == nil {
 				// Not an error: There are no more documents after "id".
 				return
+			}
+
+			// emit envelope
+			fmt.Println("loaded event", envelope.ID.Hex())
+			out <- *envelope
+
+			// move to next element
+			id = envelope.ID
+		}
+	}()
+
+	return out
+}
+
+// FollowEvents returns a channel that emits all events in turn.
+func (s *EventStore) FollowEvents(ctx context.Context, start primitive.ObjectID) <-chan Envelope {
+	out := make(chan Envelope)
+
+	// run code to retrieve events in a goroutine
+	go func() {
+		// close channel on finish
+		defer close(out)
+
+		// don't do anything if the error state of the store is set already
+		if s.Error() != nil {
+			return
+		}
+
+		// load the referenced start object to verify the ID is valid
+		if !start.IsZero() {
+			ref := s.RetrieveOne(ctx, start)
+			if ref == nil {
+				return
+			}
+		}
+
+		// create notification channel
+		nch := s.FollowNotifications(ctx)
+
+		// pump events
+		id := start
+		for {
+			// retrieve next envelope
+			envelope := s.RetrieveNext(ctx, id)
+			if s.Error() != nil {
+				return
+			}
+			if envelope == nil {
+				// no more documents after "id"
+				// When this happens, we just wait for notifications,
+				// which are emitted when new events are queued.
+				select {
+				case <-ctx.Done():
+					fmt.Println("cancelled by context:", ctx.Err())
+					return
+				case nid := <-nch:
+					fmt.Println("received notification", nid.Hex())
+					continue
+				}
 			}
 
 			// emit envelope
