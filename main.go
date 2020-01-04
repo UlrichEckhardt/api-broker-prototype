@@ -74,32 +74,35 @@ func main() {
 
 // insert a new event
 func insertMain(event string) error {
-	events, notifications, err := Connect()
-	if err != nil {
-		return err
+	store := NewEventStore()
+	if store.Error() != nil {
+		return store.Error()
 	}
 
 	// insert an additional document
-	id, err := insertNewDocument(bson.M{"event": event}, events, notifications)
-	if err != nil {
-		return err
+	var doc Envelope
+	doc.Payload = bson.M{"event": event}
+	id := store.Insert(doc)
+	if store.Error() != nil {
+		return store.Error()
 	}
+
 	fmt.Println("inserted new document", id.Hex())
 	return nil
 }
 
 // process existing elements
 func processMain(lastProcessed primitive.ObjectID) error {
-	events, notifications, err := Connect()
-	if err != nil {
-		return err
+	store := NewEventStore()
+	if store.Error() != nil {
+		return store.Error()
 	}
 
 	// iterate over existing events
 	for {
-		envelope, err := getNextDocument(lastProcessed, events, notifications)
-		if err != nil {
-			return err
+		envelope := store.RetrieveNext(lastProcessed)
+		if store.Error() != nil {
+			return store.Error()
 		}
 		if envelope == nil {
 			break
@@ -115,44 +118,95 @@ func processMain(lastProcessed primitive.ObjectID) error {
 	return nil
 }
 
-func insertNewDocument(payload bson.M, events *mongo.Collection, notifications *mongo.Collection) (primitive.ObjectID, error) {
-	var doc Envelope
-	doc.Created = primitive.NewDateTimeFromTime(time.Now())
-	doc.Payload = payload
-
-	res, err := events.InsertOne(context.Background(), doc)
-	if err != nil {
-		return primitive.NilObjectID, err
-	}
-	id, ok := res.InsertedID.(primitive.ObjectID)
-	if !ok {
-		return primitive.NilObjectID, errors.New("no ID returned from insert")
-	}
-
-	return id, nil
+// EventStore represents the storage and retrieval of events. The content is
+// represented using The envelope type above.
+type EventStore struct {
+	events        *mongo.Collection
+	notifications *mongo.Collection
+	err           error
 }
 
-func getNextDocument(lastProcessed primitive.ObjectID, events *mongo.Collection, notifications *mongo.Collection) (*Envelope, error) {
+// NewEventStore connects an EventStore instance. In case of errors, the event
+// store is nonfunctional and the according error state is set.
+func NewEventStore() *EventStore {
+	var s EventStore
+	events, notifications, err := Connect()
+	if err == nil {
+		// initialize collections
+		s.events = events
+		s.notifications = notifications
+	} else {
+		// set error state
+		s.err = err
+	}
+	return &s
+}
+
+// Retrieve the error state of the event store.
+func (s *EventStore) Error() error {
+	return s.err
+}
+
+// Insert a new event (wrapped in the envelope) into the event store. It
+// returns the newly inserted event's ID. If it returns nil, the state of
+// the event store carries the according error.
+func (s *EventStore) Insert(env Envelope) primitive.ObjectID {
+	// don't do anything if the error state of the store is set already
+	if s.err != nil {
+		return primitive.NilObjectID
+	}
+
+	// set creation date
+	env.Created = primitive.NewDateTimeFromTime(time.Now())
+
+	// insert new document
+	res, err := s.events.InsertOne(context.Background(), env)
+	if err != nil {
+		s.err = err
+		return primitive.NilObjectID
+	}
+
+	// decode and return the assigned object ID
+	id, ok := res.InsertedID.(primitive.ObjectID)
+	if !ok {
+		s.err = errors.New("no ID returned from insert")
+		return primitive.NilObjectID
+	}
+
+	return id
+}
+
+// RetrieveNext retrieves the event following the one with the given ID.
+func (s *EventStore) RetrieveNext(id primitive.ObjectID) *Envelope {
+	// don't do anything if the error state of the store is set already
+	if s.err != nil {
+		return nil
+	}
+
 	var filter interface{}
-	if lastProcessed.IsZero() {
+	if id.IsZero() {
 		filter = bson.M{}
 	} else {
-		filter = bson.M{"_id": bson.M{"$gt": lastProcessed}}
+		filter = bson.M{"_id": bson.M{"$gt": id}}
 	}
 
-	res := events.FindOne(nil, filter)
+	// retrieve the actual document from the DB
+	res := s.events.FindOne(nil, filter)
 	if res.Err() == mongo.ErrNoDocuments {
 		// not an error, there are no more documents left
-		return nil, nil
+		return nil
 	}
 	if res.Err() != nil {
-		return nil, res.Err()
+		s.err = res.Err()
+		return nil
 	}
 
+	// decode and return the envelope
 	var envelope Envelope
 	if err := res.Decode(&envelope); err != nil {
-		return nil, err
+		s.err = err
+		return nil
 	}
 
-	return &envelope, nil
+	return &envelope
 }
