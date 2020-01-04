@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"os"
 	"time"
 )
@@ -95,6 +96,18 @@ func main() {
 					return processMain(lastProcessed)
 				},
 			},
+			{
+				Name:      "watch",
+				Usage:     "process notifications from the store",
+				ArgsUsage: " ", // no arguments expected
+				Action: func(c *cli.Context) error {
+					if c.NArg() > 0 {
+						return errors.New("no arguments expected")
+					}
+
+					return watchMain()
+				},
+			},
 		},
 	}
 
@@ -179,6 +192,26 @@ func processMain(lastProcessed primitive.ObjectID) error {
 	// process events from the channel
 	for envelope := range ch {
 		fmt.Println("received event", envelope.ID.Hex(), envelope.Created.Time().Format(time.RFC3339), envelope.Payload)
+	}
+
+	return store.Error()
+}
+
+// watch stream of notifications
+func watchMain() error {
+	store := NewEventStore()
+	if store.Error() != nil {
+		return store.Error()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := store.FollowNotifications(ctx)
+
+	// process notifications from the channel
+	for oid := range ch {
+		fmt.Println("received notification", oid.Hex())
 	}
 
 	return store.Error()
@@ -363,6 +396,46 @@ func (s *EventStore) LoadEvents(ctx context.Context, start primitive.ObjectID) <
 
 			// move to next element
 			id = envelope.ID
+		}
+	}()
+
+	return out
+}
+
+// FollowNotifications returns a channel that emits all notifications in turn.
+func (s *EventStore) FollowNotifications(ctx context.Context) <-chan primitive.ObjectID {
+	out := make(chan primitive.ObjectID)
+
+	// run code to pump notifications in a goroutine
+	go func() {
+		// close channel on finish
+		defer close(out)
+
+		// don't do anything if the error state of the store is set already
+		if s.Error() != nil {
+			return
+		}
+
+		// create a tailable cursor on the notifications collection
+		filter := bson.M{}
+		var opts options.FindOptions
+		opts.SetCursorType(options.TailableAwait)
+		cursor, err := s.notifications.Find(ctx, filter, &opts)
+		if err != nil {
+			s.err = err
+			return
+		}
+		defer cursor.Close(ctx)
+
+		// pump notifications
+		for cursor.Next(ctx) {
+			var note Notification
+			if err := cursor.Decode(&note); err != nil {
+				s.err = err
+				return
+			}
+			fmt.Println("loaded notification", note.ID.Hex())
+			out <- note.ID
 		}
 	}()
 
