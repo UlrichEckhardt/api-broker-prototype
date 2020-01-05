@@ -37,6 +37,33 @@ func main() {
 				},
 			},
 			{
+				Name:      "list",
+				Usage:     "List all events in the store.",
+				ArgsUsage: " ", // no arguments expected
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "start-after",
+						Value: "",
+						Usage: "`ID` of the event after which to start processing",
+					},
+				},
+				Action: func(c *cli.Context) error {
+					if c.NArg() > 0 {
+						return errors.New("no arguments expected")
+					}
+
+					var lastProcessed primitive.ObjectID
+					if processStartAfter := c.String("start-after"); processStartAfter != "" {
+						lp, err := primitive.ObjectIDFromHex(processStartAfter)
+						if err != nil {
+							return err
+						}
+						lastProcessed = lp
+					}
+					return listMain(lastProcessed)
+				},
+			},
+			{
 				Name:      "process",
 				Usage:     "process events from the store",
 				ArgsUsage: " ", // no arguments expected
@@ -89,6 +116,23 @@ func insertMain(event string) error {
 
 	fmt.Println("inserted new document", id.Hex())
 	return nil
+}
+
+// list existing elements
+func listMain(lastProcessed primitive.ObjectID) error {
+	store := NewEventStore()
+	if store.Error() != nil {
+		return store.Error()
+	}
+
+	ch := store.LoadEvents(lastProcessed)
+
+	// process events from the channel
+	for envelope := range ch {
+		fmt.Println("received event", envelope.ID.Hex(), envelope.Created.Time().Format(time.RFC3339), envelope.Payload)
+	}
+
+	return store.Error()
 }
 
 // process existing elements
@@ -220,4 +264,43 @@ func (s *EventStore) RetrieveNext(id primitive.ObjectID) *Envelope {
 	}
 
 	return &envelope
+}
+
+// LoadEvents returns a channel that emits all events in turn.
+func (s *EventStore) LoadEvents(start primitive.ObjectID) <-chan Envelope {
+	out := make(chan Envelope)
+
+	// run code to retrieve events in a goroutine
+	go func() {
+		// close channel on finish
+		defer close(out)
+
+		// don't do anything if the error state of the store is set already
+		if s.Error() != nil {
+			return
+		}
+
+		// pump events
+		id := start
+		for {
+			// retrieve next envelope
+			envelope := s.RetrieveNext(id)
+			if s.Error() != nil {
+				return
+			}
+			if envelope == nil {
+				// Not an error: There are no more documents after "id".
+				return
+			}
+
+			// emit envelope
+			fmt.Println("loaded event", envelope.ID.Hex())
+			out <- *envelope
+
+			// move to next element
+			id = envelope.ID
+		}
+	}()
+
+	return out
 }
