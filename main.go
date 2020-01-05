@@ -106,10 +106,13 @@ func insertMain(event string) error {
 		return store.Error()
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// insert an additional document
 	var doc Envelope
 	doc.Payload = bson.M{"event": event}
-	id := store.Insert(doc)
+	id := store.Insert(ctx, doc)
 	if store.Error() != nil {
 		return store.Error()
 	}
@@ -125,7 +128,10 @@ func listMain(lastProcessed primitive.ObjectID) error {
 		return store.Error()
 	}
 
-	ch := store.LoadEvents(lastProcessed)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := store.LoadEvents(ctx, lastProcessed)
 
 	// process events from the channel
 	for envelope := range ch {
@@ -149,7 +155,7 @@ func processMain(lastProcessed primitive.ObjectID) error {
 		defer close(sink)
 		for {
 			// retrieve next envelope
-			envelope := store.RetrieveNext(id)
+			envelope := store.RetrieveNext(context.Background(), id)
 			if store.Error() != nil {
 				return
 			}
@@ -205,7 +211,7 @@ func (s *EventStore) Error() error {
 // Insert a new event (wrapped in the envelope) into the event store. It
 // returns the newly inserted event's ID. If it returns nil, the state of
 // the event store carries the according error.
-func (s *EventStore) Insert(env Envelope) primitive.ObjectID {
+func (s *EventStore) Insert(ctx context.Context, env Envelope) primitive.ObjectID {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return primitive.NilObjectID
@@ -215,7 +221,7 @@ func (s *EventStore) Insert(env Envelope) primitive.ObjectID {
 	env.Created = primitive.NewDateTimeFromTime(time.Now())
 
 	// insert new document
-	res, err := s.events.InsertOne(context.Background(), env)
+	res, err := s.events.InsertOne(ctx, env)
 	if err != nil {
 		s.err = err
 		return primitive.NilObjectID
@@ -233,7 +239,7 @@ func (s *EventStore) Insert(env Envelope) primitive.ObjectID {
 
 // RetrieveOne retrieves the event with the given ID.
 // When the document is not found, it sets the error state of the store.
-func (s *EventStore) RetrieveOne(id primitive.ObjectID) *Envelope {
+func (s *EventStore) RetrieveOne(ctx context.Context, id primitive.ObjectID) *Envelope {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil
@@ -247,7 +253,7 @@ func (s *EventStore) RetrieveOne(id primitive.ObjectID) *Envelope {
 
 	// retrieve the document from the DB
 	filter := bson.M{"_id": bson.M{"$eq": id}}
-	res := s.events.FindOne(nil, filter)
+	res := s.events.FindOne(ctx, filter)
 	if res.Err() == mongo.ErrNoDocuments {
 		s.err = errors.New("document not found")
 		return nil
@@ -268,7 +274,7 @@ func (s *EventStore) RetrieveOne(id primitive.ObjectID) *Envelope {
 }
 
 // RetrieveNext retrieves the event following the one with the given ID.
-func (s *EventStore) RetrieveNext(id primitive.ObjectID) *Envelope {
+func (s *EventStore) RetrieveNext(ctx context.Context, id primitive.ObjectID) *Envelope {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil
@@ -282,7 +288,7 @@ func (s *EventStore) RetrieveNext(id primitive.ObjectID) *Envelope {
 	}
 
 	// retrieve the actual document from the DB
-	res := s.events.FindOne(nil, filter)
+	res := s.events.FindOne(ctx, filter)
 	if res.Err() == mongo.ErrNoDocuments {
 		// not an error, there are no more documents left
 		return nil
@@ -303,7 +309,7 @@ func (s *EventStore) RetrieveNext(id primitive.ObjectID) *Envelope {
 }
 
 // LoadEvents returns a channel that emits all events in turn.
-func (s *EventStore) LoadEvents(start primitive.ObjectID) <-chan Envelope {
+func (s *EventStore) LoadEvents(ctx context.Context, start primitive.ObjectID) <-chan Envelope {
 	out := make(chan Envelope)
 
 	// run code to retrieve events in a goroutine
@@ -318,7 +324,7 @@ func (s *EventStore) LoadEvents(start primitive.ObjectID) <-chan Envelope {
 
 		// load the referenced start object to verify the ID is valid
 		if !start.IsZero() {
-			ref := s.RetrieveOne(start)
+			ref := s.RetrieveOne(ctx, start)
 			if ref == nil {
 				return
 			}
@@ -328,7 +334,7 @@ func (s *EventStore) LoadEvents(start primitive.ObjectID) <-chan Envelope {
 		id := start
 		for {
 			// retrieve next envelope
-			envelope := s.RetrieveNext(id)
+			envelope := s.RetrieveNext(ctx, id)
 			if s.Error() != nil {
 				return
 			}
