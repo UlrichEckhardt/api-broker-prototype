@@ -231,6 +231,42 @@ func (s *EventStore) Insert(env Envelope) primitive.ObjectID {
 	return id
 }
 
+// RetrieveOne retrieves the event with the given ID.
+// When the document is not found, it sets the error state of the store.
+func (s *EventStore) RetrieveOne(id primitive.ObjectID) *Envelope {
+	// don't do anything if the error state of the store is set already
+	if s.err != nil {
+		return nil
+	}
+
+	// The ID must be valid.
+	if id.IsZero() {
+		s.err = errors.New("provided document ID is null")
+		return nil
+	}
+
+	// retrieve the document from the DB
+	filter := bson.M{"_id": bson.M{"$eq": id}}
+	res := s.events.FindOne(nil, filter)
+	if res.Err() == mongo.ErrNoDocuments {
+		s.err = errors.New("document not found")
+		return nil
+	}
+	if res.Err() != nil {
+		s.err = res.Err()
+		return nil
+	}
+
+	// decode and return the envelope
+	var envelope Envelope
+	if err := res.Decode(&envelope); err != nil {
+		s.err = err
+		return nil
+	}
+
+	return &envelope
+}
+
 // RetrieveNext retrieves the event following the one with the given ID.
 func (s *EventStore) RetrieveNext(id primitive.ObjectID) *Envelope {
 	// don't do anything if the error state of the store is set already
@@ -278,6 +314,14 @@ func (s *EventStore) LoadEvents(start primitive.ObjectID) <-chan Envelope {
 		// don't do anything if the error state of the store is set already
 		if s.Error() != nil {
 			return
+		}
+
+		// load the referenced start object to verify the ID is valid
+		if !start.IsZero() {
+			ref := s.RetrieveOne(start)
+			if ref == nil {
+				return
+			}
 		}
 
 		// pump events
