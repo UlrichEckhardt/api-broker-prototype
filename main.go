@@ -10,19 +10,20 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"os"
+	"strconv"
 	"time"
 )
 
 //Envelope .
 type Envelope struct {
-	ID      primitive.ObjectID `bson:"_id,omitempty"`
+	ID      int32              `bson:"_id"`
 	Created primitive.DateTime `bson:"created"`
 	Payload bson.M             `bson:"payload"`
 }
 
 // Notification just carries the ID of a persisted event.
 type Notification struct {
-	ID primitive.ObjectID `bson:"_id,omitempty"`
+	ID int32 `bson:"_id"`
 }
 
 func main() {
@@ -58,13 +59,13 @@ func main() {
 						return errors.New("no arguments expected")
 					}
 
-					var lastProcessed primitive.ObjectID
+					var lastProcessed int32
 					if processStartAfter := c.String("start-after"); processStartAfter != "" {
-						lp, err := primitive.ObjectIDFromHex(processStartAfter)
+						lp, err := strconv.ParseInt(processStartAfter, 10, 32)
 						if err != nil {
 							return err
 						}
-						lastProcessed = lp
+						lastProcessed = int32(lp)
 					}
 					return listMain(lastProcessed)
 				},
@@ -85,13 +86,13 @@ func main() {
 						return errors.New("no arguments expected")
 					}
 
-					var lastProcessed primitive.ObjectID
+					var lastProcessed int32
 					if processStartAfter := c.String("start-after"); processStartAfter != "" {
-						lp, err := primitive.ObjectIDFromHex(processStartAfter)
+						lp, err := strconv.ParseInt(processStartAfter, 10, 32)
 						if err != nil {
 							return err
 						}
-						lastProcessed = lp
+						lastProcessed = int32(lp)
 					}
 					return processMain(lastProcessed)
 				},
@@ -135,12 +136,12 @@ func insertMain(event string) error {
 		return store.Error()
 	}
 
-	fmt.Println("inserted new document", id.Hex())
+	fmt.Println("inserted new document", id)
 	return nil
 }
 
 // list existing elements
-func listMain(lastProcessed primitive.ObjectID) error {
+func listMain(lastProcessed int32) error {
 	store := NewEventStore()
 	if store.Error() != nil {
 		return store.Error()
@@ -153,14 +154,14 @@ func listMain(lastProcessed primitive.ObjectID) error {
 
 	// process events from the channel
 	for envelope := range ch {
-		fmt.Println("received event", envelope.ID.Hex(), envelope.Created.Time().Format(time.RFC3339), envelope.Payload)
+		fmt.Println("received event", envelope.ID, envelope.Created.Time().Format(time.RFC3339), envelope.Payload)
 	}
 
 	return store.Error()
 }
 
 // process existing elements
-func processMain(lastProcessed primitive.ObjectID) error {
+func processMain(lastProcessed int32) error {
 	store := NewEventStore()
 	if store.Error() != nil {
 		return store.Error()
@@ -173,7 +174,7 @@ func processMain(lastProcessed primitive.ObjectID) error {
 
 	// process events from the channel
 	for envelope := range ch {
-		fmt.Println("received event", envelope.ID.Hex(), envelope.Created.Time().Format(time.RFC3339), envelope.Payload)
+		fmt.Println("received event", envelope.ID, envelope.Created.Time().Format(time.RFC3339), envelope.Payload)
 	}
 
 	return store.Error()
@@ -193,7 +194,7 @@ func watchMain() error {
 
 	// process notifications from the channel
 	for oid := range ch {
-		fmt.Println("received notification", oid.Hex())
+		fmt.Println("received notification", oid)
 	}
 
 	return store.Error()
@@ -229,53 +230,100 @@ func (s *EventStore) Error() error {
 }
 
 // Insert a new event (wrapped in the envelope) into the event store. It
-// returns the newly inserted event's ID. If it returns nil, the state of
+// returns the newly inserted event's ID. If it returns zero, the state of
 // the event store carries the according error.
-func (s *EventStore) Insert(ctx context.Context, env Envelope) primitive.ObjectID {
+func (s *EventStore) Insert(ctx context.Context, env Envelope) int32 {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
-		return primitive.NilObjectID
+		return 0
 	}
 
-	// set creation date
-	env.Created = primitive.NewDateTimeFromTime(time.Now())
-
-	// insert new document
-	res, err := s.events.InsertOne(ctx, env)
-	if err != nil {
-		s.err = err
-		return primitive.NilObjectID
+	// generate an ID
+	env.ID = s.findNextID(ctx)
+	if env.ID == 0 {
+		return 0
 	}
 
-	// decode and return the assigned object ID
-	id, ok := res.InsertedID.(primitive.ObjectID)
-	if !ok {
-		s.err = errors.New("no ID returned from insert")
-		return primitive.NilObjectID
+	for {
+		// set creation date
+		env.Created = primitive.NewDateTimeFromTime(time.Now())
+
+		// insert new document
+		res, err := s.events.InsertOne(ctx, env)
+		if err != nil {
+			// Check if the next free ID changed. In that case,
+			// just try again with the new ID.
+			id := s.findNextID(ctx)
+			if id != env.ID {
+				env.ID = id
+				continue
+			}
+			s.err = err
+			return 0
+		}
+
+		// decode the assigned object ID
+		id, ok := res.InsertedID.(int32)
+		if !ok {
+			s.err = errors.New("no ID returned from insert")
+			return 0
+		}
+		if id != env.ID {
+			s.err = errors.New("returned ID differs from written ID")
+		}
+		break
 	}
 
 	// insert a notification with the created document's ID
 	var note Notification
-	note.ID = id
-	_, err = s.notifications.InsertOne(ctx, note)
+	note.ID = env.ID
+	_, err := s.notifications.InsertOne(ctx, note)
 	if err != nil {
 		s.err = err
-		return primitive.NilObjectID
+		return 0
 	}
 
-	return id
+	return env.ID
+}
+
+// find next free ID to use for an insert
+// This returns zero if an error occurs.
+func (s *EventStore) findNextID(ctx context.Context) int32 {
+	// find the event with the highest ID
+	opts := options.FindOne().
+		SetBatchSize(1).
+		SetProjection(bson.M{"_id": 1}).
+		SetSort(bson.M{"_id": -1})
+	res := s.events.FindOne(ctx, bson.M{}, opts)
+	if res.Err() == mongo.ErrNoDocuments {
+		// not an error, the collection is only empty
+		return 1
+	}
+	if res.Err() != nil {
+		s.err = res.Err()
+		return 0
+	}
+
+	// decode and return the envelope's ID increased by one
+	var envelope Envelope
+	if err := res.Decode(&envelope); err != nil {
+		s.err = err
+		return 0
+	}
+
+	return envelope.ID + 1
 }
 
 // RetrieveOne retrieves the event with the given ID.
 // When the document is not found, it sets the error state of the store.
-func (s *EventStore) RetrieveOne(ctx context.Context, id primitive.ObjectID) *Envelope {
+func (s *EventStore) RetrieveOne(ctx context.Context, id int32) *Envelope {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil
 	}
 
 	// The ID must be valid.
-	if id.IsZero() {
+	if id == 0 {
 		s.err = errors.New("provided document ID is null")
 		return nil
 	}
@@ -303,14 +351,14 @@ func (s *EventStore) RetrieveOne(ctx context.Context, id primitive.ObjectID) *En
 }
 
 // RetrieveNext retrieves the event following the one with the given ID.
-func (s *EventStore) RetrieveNext(ctx context.Context, id primitive.ObjectID) *Envelope {
+func (s *EventStore) RetrieveNext(ctx context.Context, id int32) *Envelope {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil
 	}
 
 	var filter interface{}
-	if id.IsZero() {
+	if id == 0 {
 		filter = bson.M{}
 	} else {
 		filter = bson.M{"_id": bson.M{"$gt": id}}
@@ -338,7 +386,7 @@ func (s *EventStore) RetrieveNext(ctx context.Context, id primitive.ObjectID) *E
 }
 
 // LoadEvents returns a channel that emits all events in turn.
-func (s *EventStore) LoadEvents(ctx context.Context, start primitive.ObjectID) <-chan Envelope {
+func (s *EventStore) LoadEvents(ctx context.Context, start int32) <-chan Envelope {
 	out := make(chan Envelope)
 
 	// run code to retrieve events in a goroutine
@@ -352,7 +400,7 @@ func (s *EventStore) LoadEvents(ctx context.Context, start primitive.ObjectID) <
 		}
 
 		// load the referenced start object to verify the ID is valid
-		if !start.IsZero() {
+		if start != 0 {
 			ref := s.RetrieveOne(ctx, start)
 			if ref == nil {
 				return
@@ -373,7 +421,7 @@ func (s *EventStore) LoadEvents(ctx context.Context, start primitive.ObjectID) <
 			}
 
 			// emit envelope
-			fmt.Println("loaded event", envelope.ID.Hex())
+			fmt.Println("loaded event", envelope.ID)
 			out <- *envelope
 
 			// move to next element
@@ -385,7 +433,7 @@ func (s *EventStore) LoadEvents(ctx context.Context, start primitive.ObjectID) <
 }
 
 // FollowEvents returns a channel that emits all events in turn.
-func (s *EventStore) FollowEvents(ctx context.Context, start primitive.ObjectID) <-chan Envelope {
+func (s *EventStore) FollowEvents(ctx context.Context, start int32) <-chan Envelope {
 	out := make(chan Envelope)
 
 	// run code to retrieve events in a goroutine
@@ -399,7 +447,7 @@ func (s *EventStore) FollowEvents(ctx context.Context, start primitive.ObjectID)
 		}
 
 		// load the referenced start object to verify the ID is valid
-		if !start.IsZero() {
+		if start != 0 {
 			ref := s.RetrieveOne(ctx, start)
 			if ref == nil {
 				return
@@ -426,13 +474,13 @@ func (s *EventStore) FollowEvents(ctx context.Context, start primitive.ObjectID)
 					fmt.Println("cancelled by context:", ctx.Err())
 					return
 				case nid := <-nch:
-					fmt.Println("received notification", nid.Hex())
+					fmt.Println("received notification", nid)
 					continue
 				}
 			}
 
 			// emit envelope
-			fmt.Println("loaded event", envelope.ID.Hex())
+			fmt.Println("loaded event", envelope.ID)
 			out <- *envelope
 
 			// move to next element
@@ -444,8 +492,8 @@ func (s *EventStore) FollowEvents(ctx context.Context, start primitive.ObjectID)
 }
 
 // FollowNotifications returns a channel that emits all notifications in turn.
-func (s *EventStore) FollowNotifications(ctx context.Context) <-chan primitive.ObjectID {
-	out := make(chan primitive.ObjectID)
+func (s *EventStore) FollowNotifications(ctx context.Context) <-chan int32 {
+	out := make(chan int32)
 
 	// run code to pump notifications in a goroutine
 	go func() {
@@ -475,7 +523,7 @@ func (s *EventStore) FollowNotifications(ctx context.Context) <-chan primitive.O
 				s.err = err
 				return
 			}
-			fmt.Println("loaded notification", note.ID.Hex())
+			fmt.Println("loaded notification", note.ID)
 			out <- note.ID
 		}
 	}()
