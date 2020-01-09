@@ -22,6 +22,9 @@ type Notification struct {
 
 // The EventStore interface defines a few basic functions that an event store has to provide.
 type EventStore interface {
+	// ParseEventID parses a string that represents an event identifier.
+	ParseEventID(str string) (int32, error)
+
 	// Retrieve error state of the event store.
 	// All functions below set this error state in order to signal failure.
 	Error() error

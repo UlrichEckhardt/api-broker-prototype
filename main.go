@@ -7,7 +7,6 @@ import (
 	"github.com/urfave/cli/v2" // imports as package "cli"
 	"go.mongodb.org/mongo-driver/bson"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -44,15 +43,7 @@ func main() {
 						return errors.New("no arguments expected")
 					}
 
-					var lastProcessed int32
-					if processStartAfter := c.String("start-after"); processStartAfter != "" {
-						lp, err := strconv.ParseInt(processStartAfter, 10, 32)
-						if err != nil {
-							return err
-						}
-						lastProcessed = int32(lp)
-					}
-					return listMain(lastProcessed)
+					return listMain(c.String("start-after"))
 				},
 			},
 			{
@@ -71,15 +62,7 @@ func main() {
 						return errors.New("no arguments expected")
 					}
 
-					var lastProcessed int32
-					if processStartAfter := c.String("start-after"); processStartAfter != "" {
-						lp, err := strconv.ParseInt(processStartAfter, 10, 32)
-						if err != nil {
-							return err
-						}
-						lastProcessed = int32(lp)
-					}
-					return processMain(lastProcessed)
+					return processMain(c.String("start-after"))
 				},
 			},
 			{
@@ -126,16 +109,26 @@ func insertMain(event string) error {
 }
 
 // list existing elements
-func listMain(lastProcessed int32) error {
+func listMain(lastProcessed string) error {
 	store := NewEventStore()
 	if store.Error() != nil {
 		return store.Error()
 	}
 
+	// parse optional event ID
+	var lastProcessedID int32
+	if lastProcessed != "" {
+		id, err := store.ParseEventID(lastProcessed)
+		if err != nil {
+			return err
+		}
+		lastProcessedID = id
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := store.LoadEvents(ctx, lastProcessed)
+	ch := store.LoadEvents(ctx, lastProcessedID)
 
 	// process events from the channel
 	for envelope := range ch {
@@ -146,16 +139,26 @@ func listMain(lastProcessed int32) error {
 }
 
 // process existing elements
-func processMain(lastProcessed int32) error {
+func processMain(lastProcessed string) error {
 	store := NewEventStore()
 	if store.Error() != nil {
 		return store.Error()
 	}
 
+	// parse optional event ID
+	var lastProcessedID int32
+	if lastProcessed != "" {
+		id, err := store.ParseEventID(lastProcessed)
+		if err != nil {
+			return err
+		}
+		lastProcessedID = id
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := store.FollowEvents(ctx, lastProcessed)
+	ch := store.FollowEvents(ctx, lastProcessedID)
 
 	// process events from the channel
 	for envelope := range ch {

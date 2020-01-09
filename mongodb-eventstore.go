@@ -16,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"strconv"
 	"time"
 )
 
@@ -39,6 +40,15 @@ func NewEventStore() EventStore {
 		s.err = err
 	}
 	return &s
+}
+
+// ParseEventID implements the EventStore interface.
+func (s *mongoDBEventStore) ParseEventID(str string) (int32, error) {
+	lp, err := strconv.ParseInt(str, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return int32(lp), nil
 }
 
 // Error implements the EventStore interface.
