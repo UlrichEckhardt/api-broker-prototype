@@ -63,17 +63,17 @@ func (s *mongoDBEventStore) Insert(ctx context.Context, payload bson.M) *Envelop
 		return nil
 	}
 
-	env := Envelope{Payload: payload}
+	env := Envelope{PayloadVal: payload}
 
 	// generate an ID
-	env.ID = s.findNextID(ctx)
-	if env.ID == 0 {
+	env.IDVal = s.findNextID(ctx)
+	if env.IDVal == 0 {
 		return nil
 	}
 
 	for {
 		// set creation date
-		env.Created = primitive.NewDateTimeFromTime(time.Now())
+		env.CreatedVal = primitive.NewDateTimeFromTime(time.Now())
 
 		// insert new document
 		res, err := s.events.InsertOne(ctx, env)
@@ -81,8 +81,8 @@ func (s *mongoDBEventStore) Insert(ctx context.Context, payload bson.M) *Envelop
 			// Check if the next free ID changed. In that case,
 			// just try again with the new ID.
 			id := s.findNextID(ctx)
-			if id != env.ID {
-				env.ID = id
+			if id != env.IDVal {
+				env.IDVal = id
 				continue
 			}
 			s.err = err
@@ -95,7 +95,7 @@ func (s *mongoDBEventStore) Insert(ctx context.Context, payload bson.M) *Envelop
 			s.err = errors.New("no ID returned from insert")
 			return nil
 		}
-		if id != env.ID {
+		if id != env.IDVal {
 			s.err = errors.New("returned ID differs from written ID")
 		}
 		break
@@ -103,7 +103,7 @@ func (s *mongoDBEventStore) Insert(ctx context.Context, payload bson.M) *Envelop
 
 	// insert a notification with the created document's ID
 	var note Notification
-	note.ID = env.ID
+	note.IDVal = env.IDVal
 	_, err := s.notifications.InsertOne(ctx, note)
 	if err != nil {
 		s.err = err
@@ -138,7 +138,7 @@ func (s *mongoDBEventStore) findNextID(ctx context.Context) int32 {
 		return 0
 	}
 
-	return envelope.ID + 1
+	return envelope.IDVal + 1
 }
 
 // RetrieveOne implements the EventStore interface.
@@ -247,11 +247,11 @@ func (s *mongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan 
 			}
 
 			// emit envelope
-			fmt.Println("loaded event", envelope.ID)
+			fmt.Println("loaded event", envelope.ID())
 			out <- *envelope
 
 			// move to next element
-			id = envelope.ID
+			id = envelope.IDVal
 		}
 	}()
 
@@ -290,7 +290,7 @@ func (s *mongoDBEventStore) FollowNotifications(ctx context.Context) <-chan Noti
 				s.err = err
 				return
 			}
-			fmt.Println("loaded notification", note.ID)
+			fmt.Println("loaded notification", note.ID())
 			out <- note
 		}
 	}()
@@ -340,17 +340,17 @@ func (s *mongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-cha
 					fmt.Println("cancelled by context:", ctx.Err())
 					return
 				case notification := <-nch:
-					fmt.Println("received notification", notification.ID)
+					fmt.Println("received notification", notification.ID())
 					continue
 				}
 			}
 
 			// emit envelope
-			fmt.Println("loaded event", envelope.ID)
+			fmt.Println("loaded event", envelope.ID())
 			out <- *envelope
 
 			// move to next element
-			id = envelope.ID
+			id = envelope.IDVal
 		}
 	}()
 

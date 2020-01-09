@@ -4,20 +4,41 @@ import (
 	"context"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"time"
 )
 
 // The Envelope is a container for the actual event, which it carries as
 // payload. In addition, it contains the time when the envelope was persisted
 // and an ID which is a sequence counter.
 type Envelope struct {
-	ID      int32              `bson:"_id"`
-	Created primitive.DateTime `bson:"created"`
-	Payload bson.M             `bson:"payload"`
+	IDVal      int32              `bson:"_id"`
+	CreatedVal primitive.DateTime `bson:"created"`
+	PayloadVal bson.M             `bson:"payload"`
+}
+
+// ID returns the identifier for the event.
+func (env *Envelope) ID() int32 {
+	return env.IDVal
+}
+
+// Created returns the time the event was persisted.
+func (env *Envelope) Created() time.Time {
+	return env.CreatedVal.Time()
+}
+
+// Payload returns the payload contained in the envelope.
+func (env *Envelope) Payload() bson.M {
+	return env.PayloadVal
 }
 
 // Notification just carries the ID of a persisted event.
 type Notification struct {
-	ID int32 `bson:"_id"`
+	IDVal int32 `bson:"_id"`
+}
+
+// ID returns the identifier for the event stored in the notification.
+func (note *Notification) ID() int32 {
+	return note.IDVal
 }
 
 // The EventStore interface defines a few basic functions that an event store has to provide.

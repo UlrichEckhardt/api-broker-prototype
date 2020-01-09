@@ -103,7 +103,7 @@ func insertMain(event string) error {
 		return store.Error()
 	}
 
-	fmt.Println("inserted new document", envelope.ID)
+	fmt.Println("inserted new document", envelope.ID())
 	return nil
 }
 
@@ -131,7 +131,7 @@ func listMain(lastProcessed string) error {
 
 	// process events from the channel
 	for envelope := range ch {
-		fmt.Println("received event", envelope.ID, envelope.Created.Time().Format(time.RFC3339), envelope.Payload)
+		fmt.Println("received event", envelope.ID(), envelope.Created().Format(time.RFC3339), envelope.Payload())
 	}
 
 	return store.Error()
@@ -161,7 +161,7 @@ func processMain(lastProcessed string) error {
 
 	// process events from the channel
 	for envelope := range ch {
-		fmt.Println("received event", envelope.ID, envelope.Created.Time().Format(time.RFC3339), envelope.Payload)
+		fmt.Println("received event", envelope.ID(), envelope.Created().Format(time.RFC3339), envelope.Payload())
 	}
 
 	return store.Error()
@@ -181,7 +181,7 @@ func watchMain() error {
 
 	// process notifications from the channel
 	for notification := range ch {
-		fmt.Println("received notification", notification.ID)
+		fmt.Println("received notification", notification.ID())
 	}
 
 	return store.Error()
