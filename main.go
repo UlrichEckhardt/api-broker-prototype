@@ -14,18 +14,6 @@ import (
 	"time"
 )
 
-//Envelope .
-type Envelope struct {
-	ID      int32              `bson:"_id"`
-	Created primitive.DateTime `bson:"created"`
-	Payload bson.M             `bson:"payload"`
-}
-
-// Notification just carries the ID of a persisted event.
-type Notification struct {
-	ID int32 `bson:"_id"`
-}
-
 func main() {
 	app := cli.App{
 		Name:  "api-broker-prototype",
@@ -200,18 +188,18 @@ func watchMain() error {
 	return store.Error()
 }
 
-// EventStore represents the storage and retrieval of events. The content is
+// MongoDBEventStore represents the storage and retrieval of events. The content is
 // represented using The envelope type above.
-type EventStore struct {
+type MongoDBEventStore struct {
 	events        *mongo.Collection
 	notifications *mongo.Collection
 	err           error
 }
 
-// NewEventStore connects an EventStore instance. In case of errors, the event
-// store is nonfunctional and the according error state is set.
-func NewEventStore() *EventStore {
-	var s EventStore
+// NewEventStore connects a MongoDBEventStore instance. In case of errors, the
+// event store is nonfunctional and the according error state is set.
+func NewEventStore() EventStore {
+	var s MongoDBEventStore
 	events, notifications, err := Connect()
 	if err == nil {
 		// initialize collections
@@ -225,14 +213,14 @@ func NewEventStore() *EventStore {
 }
 
 // Retrieve the error state of the event store.
-func (s *EventStore) Error() error {
+func (s *MongoDBEventStore) Error() error {
 	return s.err
 }
 
 // Insert a new event (wrapped in the envelope) into the event store. It
 // returns the newly inserted event's ID. If it returns zero, the state of
 // the event store carries the according error.
-func (s *EventStore) Insert(ctx context.Context, env Envelope) int32 {
+func (s *MongoDBEventStore) Insert(ctx context.Context, env Envelope) int32 {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return 0
@@ -288,7 +276,7 @@ func (s *EventStore) Insert(ctx context.Context, env Envelope) int32 {
 
 // find next free ID to use for an insert
 // This returns zero if an error occurs.
-func (s *EventStore) findNextID(ctx context.Context) int32 {
+func (s *MongoDBEventStore) findNextID(ctx context.Context) int32 {
 	// find the event with the highest ID
 	opts := options.FindOne().
 		SetBatchSize(1).
@@ -316,7 +304,7 @@ func (s *EventStore) findNextID(ctx context.Context) int32 {
 
 // RetrieveOne retrieves the event with the given ID.
 // When the document is not found, it sets the error state of the store.
-func (s *EventStore) RetrieveOne(ctx context.Context, id int32) *Envelope {
+func (s *MongoDBEventStore) RetrieveOne(ctx context.Context, id int32) *Envelope {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil
@@ -351,7 +339,7 @@ func (s *EventStore) RetrieveOne(ctx context.Context, id int32) *Envelope {
 }
 
 // RetrieveNext retrieves the event following the one with the given ID.
-func (s *EventStore) RetrieveNext(ctx context.Context, id int32) *Envelope {
+func (s *MongoDBEventStore) RetrieveNext(ctx context.Context, id int32) *Envelope {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil
@@ -386,7 +374,7 @@ func (s *EventStore) RetrieveNext(ctx context.Context, id int32) *Envelope {
 }
 
 // LoadEvents returns a channel that emits all events in turn.
-func (s *EventStore) LoadEvents(ctx context.Context, start int32) <-chan Envelope {
+func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan Envelope {
 	out := make(chan Envelope)
 
 	// run code to retrieve events in a goroutine
@@ -433,7 +421,7 @@ func (s *EventStore) LoadEvents(ctx context.Context, start int32) <-chan Envelop
 }
 
 // FollowEvents returns a channel that emits all events in turn.
-func (s *EventStore) FollowEvents(ctx context.Context, start int32) <-chan Envelope {
+func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-chan Envelope {
 	out := make(chan Envelope)
 
 	// run code to retrieve events in a goroutine
@@ -492,7 +480,7 @@ func (s *EventStore) FollowEvents(ctx context.Context, start int32) <-chan Envel
 }
 
 // FollowNotifications returns a channel that emits all notifications in turn.
-func (s *EventStore) FollowNotifications(ctx context.Context) <-chan int32 {
+func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) <-chan int32 {
 	out := make(chan int32)
 
 	// run code to pump notifications in a goroutine
