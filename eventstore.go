@@ -28,9 +28,9 @@ type EventStore interface {
 	// Retrieve error state of the event store.
 	// All functions below set this error state in order to signal failure.
 	Error() error
-	// Insert an envelope into the store.
-	// The ID of the envelope is ignored. Instead, an ID is generated and returned.
-	Insert(ctx context.Context, env Envelope) int32
+	// Insert an event as payload into the store.
+	// The event is wrapped in an envelope and returned.
+	Insert(ctx context.Context, payload bson.M) *Envelope
 	// Retrieve just the event with the given ID.
 	RetrieveOne(ctx context.Context, id int32) *Envelope
 	// Retrieve all currently existing events, which are provided via the returned channel.

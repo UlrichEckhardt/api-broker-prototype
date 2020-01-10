@@ -57,16 +57,18 @@ func (s *mongoDBEventStore) Error() error {
 }
 
 // Insert implements the EventStore interface.
-func (s *mongoDBEventStore) Insert(ctx context.Context, env Envelope) int32 {
+func (s *mongoDBEventStore) Insert(ctx context.Context, payload bson.M) *Envelope {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
-		return 0
+		return nil
 	}
+
+	env := Envelope{Payload: payload}
 
 	// generate an ID
 	env.ID = s.findNextID(ctx)
 	if env.ID == 0 {
-		return 0
+		return nil
 	}
 
 	for {
@@ -84,14 +86,14 @@ func (s *mongoDBEventStore) Insert(ctx context.Context, env Envelope) int32 {
 				continue
 			}
 			s.err = err
-			return 0
+			return nil
 		}
 
 		// decode the assigned object ID
 		id, ok := res.InsertedID.(int32)
 		if !ok {
 			s.err = errors.New("no ID returned from insert")
-			return 0
+			return nil
 		}
 		if id != env.ID {
 			s.err = errors.New("returned ID differs from written ID")
@@ -105,10 +107,10 @@ func (s *mongoDBEventStore) Insert(ctx context.Context, env Envelope) int32 {
 	_, err := s.notifications.InsertOne(ctx, note)
 	if err != nil {
 		s.err = err
-		return 0
+		return nil
 	}
 
-	return env.ID
+	return &env
 }
 
 // find next free ID to use for an insert

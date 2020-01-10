@@ -96,15 +96,14 @@ func insertMain(event string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// insert an additional document
-	var doc Envelope
-	doc.Payload = bson.M{"event": event}
-	id := store.Insert(ctx, doc)
+	// insert a document
+	payload := bson.M{"event": event}
+	envelope := store.Insert(ctx, payload)
 	if store.Error() != nil {
 		return store.Error()
 	}
 
-	fmt.Println("inserted new document", id)
+	fmt.Println("inserted new document", envelope.ID)
 	return nil
 }
 
