@@ -259,8 +259,8 @@ func (s *mongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan 
 }
 
 // FollowNotifications implements the EventStore interface.
-func (s *mongoDBEventStore) FollowNotifications(ctx context.Context) <-chan int32 {
-	out := make(chan int32)
+func (s *mongoDBEventStore) FollowNotifications(ctx context.Context) <-chan Notification {
+	out := make(chan Notification)
 
 	// run code to pump notifications in a goroutine
 	go func() {
@@ -291,7 +291,7 @@ func (s *mongoDBEventStore) FollowNotifications(ctx context.Context) <-chan int3
 				return
 			}
 			fmt.Println("loaded notification", note.ID)
-			out <- note.ID
+			out <- note
 		}
 	}()
 
@@ -339,8 +339,8 @@ func (s *mongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-cha
 				case <-ctx.Done():
 					fmt.Println("cancelled by context:", ctx.Err())
 					return
-				case nid := <-nch:
-					fmt.Println("received notification", nid)
+				case notification := <-nch:
+					fmt.Println("received notification", notification.ID)
 					continue
 				}
 			}

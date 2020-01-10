@@ -37,7 +37,7 @@ type EventStore interface {
 	LoadEvents(ctx context.Context, start int32) <-chan Envelope
 	// Follow the stream of notifications. This function emits any newly
 	// created notification via the returned channel.
-	FollowNotifications(ctx context.Context) <-chan int32
+	FollowNotifications(ctx context.Context) <-chan Notification
 	// Follow the stream of events. This function emits any newly created
 	// persisted event via the returned channel.
 	FollowEvents(ctx context.Context, start int32) <-chan Envelope

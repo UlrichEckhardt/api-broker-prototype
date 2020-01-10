@@ -180,8 +180,8 @@ func watchMain() error {
 	ch := store.FollowNotifications(ctx)
 
 	// process notifications from the channel
-	for oid := range ch {
-		fmt.Println("received notification", oid)
+	for notification := range ch {
+		fmt.Println("received notification", notification.ID)
 	}
 
 	return store.Error()
