@@ -11,7 +11,7 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
+	"github.com/inconshreveable/log15"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -57,11 +57,13 @@ type mongoDBEventStore struct {
 	events        *mongo.Collection
 	notifications *mongo.Collection
 	err           error
+	logger        log15.Logger
 }
 
 // NewEventStore creates and connects a mongoDBEventStore instance.
-func NewEventStore() EventStore {
-	var s mongoDBEventStore
+func NewEventStore(logger log15.Logger) EventStore {
+	logger.Debug("creating event store")
+	s := mongoDBEventStore{logger: logger}
 	events, notifications, err := Connect()
 	if err == nil {
 		// initialize collections
@@ -90,6 +92,8 @@ func (s *mongoDBEventStore) Error() error {
 
 // Insert implements the EventStore interface.
 func (s *mongoDBEventStore) Insert(ctx context.Context, payload bson.M) Envelope {
+	s.logger.Debug("inserting event")
+
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil
@@ -114,6 +118,7 @@ func (s *mongoDBEventStore) Insert(ctx context.Context, payload bson.M) Envelope
 			// just try again with the new ID.
 			id := s.findNextID(ctx)
 			if id != env.IDVal {
+				s.logger.Debug("retrying after race detection")
 				env.IDVal = id
 				continue
 			}
@@ -175,6 +180,8 @@ func (s *mongoDBEventStore) findNextID(ctx context.Context) int32 {
 
 // RetrieveOne implements the EventStore interface.
 func (s *mongoDBEventStore) RetrieveOne(ctx context.Context, id int32) Envelope {
+	s.logger.Debug("loading event", "id", id)
+
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil
@@ -245,6 +252,8 @@ func (s *mongoDBEventStore) retrieveNext(ctx context.Context, id int32) *mongoDB
 
 // LoadEvents implements the EventStore interface.
 func (s *mongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan Envelope {
+	s.logger.Debug("loading events", "following", start)
+
 	out := make(chan Envelope)
 
 	// run code to retrieve events in a goroutine
@@ -279,7 +288,7 @@ func (s *mongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan 
 			}
 
 			// emit envelope
-			fmt.Println("loaded event", envelope.ID())
+			s.logger.Debug("loaded event", "id", envelope.ID())
 			out <- envelope
 
 			// move to next element
@@ -292,6 +301,8 @@ func (s *mongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan 
 
 // FollowNotifications implements the EventStore interface.
 func (s *mongoDBEventStore) FollowNotifications(ctx context.Context) <-chan Notification {
+	s.logger.Debug("following notifications")
+
 	out := make(chan Notification)
 
 	// run code to pump notifications in a goroutine
@@ -322,7 +333,7 @@ func (s *mongoDBEventStore) FollowNotifications(ctx context.Context) <-chan Noti
 				s.err = err
 				return
 			}
-			fmt.Println("loaded notification", note.ID())
+			s.logger.Debug("loaded notification", "id", note.ID())
 			out <- &note
 		}
 	}()
@@ -332,6 +343,8 @@ func (s *mongoDBEventStore) FollowNotifications(ctx context.Context) <-chan Noti
 
 // FollowEvents implements the EventStore interface.
 func (s *mongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-chan Envelope {
+	s.logger.Debug("following events")
+
 	out := make(chan Envelope)
 
 	// run code to retrieve events in a goroutine
@@ -369,20 +382,20 @@ func (s *mongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-cha
 				// which are emitted when new events are queued.
 				select {
 				case <-ctx.Done():
-					fmt.Println("cancelled by context:", ctx.Err())
+					s.logger.Debug("cancelled by context", "error", ctx.Err())
 					return
 				case notification := <-nch:
 					if notification == nil {
-						fmt.Println("notification channel closed")
+						s.logger.Debug("notification channel closed")
 						return
 					}
-					fmt.Println("received notification", notification.ID())
+					s.logger.Debug("received notification", "id", notification.ID())
 					continue
 				}
 			}
 
 			// emit envelope
-			fmt.Println("loaded event", envelope.ID())
+			s.logger.Debug("loaded event", "id", envelope.ID())
 			out <- envelope
 
 			// move to next element

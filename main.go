@@ -3,11 +3,16 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
+	"github.com/inconshreveable/log15"
 	"github.com/urfave/cli/v2" // imports as package "cli"
 	"go.mongodb.org/mongo-driver/bson"
 	"os"
 	"time"
+)
+
+var (
+	logger log15.Logger
+	store  EventStore
 )
 
 func main() {
@@ -81,16 +86,23 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		fmt.Println(err)
+		logger.Debug("command exited with error", "error", err)
 		return
 	}
 }
 
+func initEventStore() error {
+	logger = log15.New("context", "event-store")
+	logger.SetHandler(log15.StdoutHandler)
+
+	store = NewEventStore(logger)
+	return store.Error()
+}
+
 // insert a new event
 func insertMain(event string) error {
-	store := NewEventStore()
-	if store.Error() != nil {
-		return store.Error()
+	if err := initEventStore(); err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -103,15 +115,14 @@ func insertMain(event string) error {
 		return store.Error()
 	}
 
-	fmt.Println("inserted new document", envelope.ID())
+	logger.Debug("inserted new document", "id", envelope.ID())
 	return nil
 }
 
 // list existing elements
 func listMain(lastProcessed string) error {
-	store := NewEventStore()
-	if store.Error() != nil {
-		return store.Error()
+	if err := initEventStore(); err != nil {
+		return err
 	}
 
 	// parse optional event ID
@@ -131,7 +142,7 @@ func listMain(lastProcessed string) error {
 
 	// process events from the channel
 	for envelope := range ch {
-		fmt.Println("received event", envelope.ID(), envelope.Created().Format(time.RFC3339), envelope.Payload())
+		logger.Info("received event", "id", envelope.ID(), "created", envelope.Created().Format(time.RFC3339), "payload", envelope.Payload())
 	}
 
 	return store.Error()
@@ -139,9 +150,8 @@ func listMain(lastProcessed string) error {
 
 // process existing elements
 func processMain(lastProcessed string) error {
-	store := NewEventStore()
-	if store.Error() != nil {
-		return store.Error()
+	if err := initEventStore(); err != nil {
+		return err
 	}
 
 	// parse optional event ID
@@ -161,7 +171,7 @@ func processMain(lastProcessed string) error {
 
 	// process events from the channel
 	for envelope := range ch {
-		fmt.Println("received event", envelope.ID(), envelope.Created().Format(time.RFC3339), envelope.Payload())
+		logger.Info("received event", "id", envelope.ID(), "created", envelope.Created().Format(time.RFC3339), "payload", envelope.Payload())
 	}
 
 	return store.Error()
@@ -169,9 +179,8 @@ func processMain(lastProcessed string) error {
 
 // watch stream of notifications
 func watchMain() error {
-	store := NewEventStore()
-	if store.Error() != nil {
-		return store.Error()
+	if err := initEventStore(); err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -181,7 +190,7 @@ func watchMain() error {
 
 	// process notifications from the channel
 	for notification := range ch {
-		fmt.Println("received notification", notification.ID())
+		logger.Info("received notification", "id", notification.ID())
 	}
 
 	return store.Error()
