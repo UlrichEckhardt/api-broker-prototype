@@ -1,5 +1,18 @@
 package main
 
+// This package contains interface definitions for an event store.
+// Generally, this is defined to be agnostic of the storage infrastructure
+// behind it. Its main parts are functions to insert events and to follow
+// the stream of events.
+// TODO:
+//  - The payload is still represented as bson.M. This is a serialization format
+//    that is mainly used in the context of MongoDB. Firstly, this restricts all
+//    implementations to those supporting that format. Secondly, convenient use
+//    probably requires a kind of serialization service in between.
+//  - The ID is also specific to the default integer representation in MongoDB.
+//    For proper function, only a strict ordering is required, it doesn't have
+//    to take the form of an integer sequence.
+
 import (
 	"context"
 	"go.mongodb.org/mongo-driver/bson"
