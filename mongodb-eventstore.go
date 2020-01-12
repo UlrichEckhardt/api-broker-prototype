@@ -1,5 +1,13 @@
 package main
 
+// Implementation of the EventStore interface on top of a MongoDB.
+// The implementation uses two collections. The "events" collection just serves
+// as a store for the event data (envelope). The "notifications" collection is
+// a bit more elaborated. It is used to build a queue that is used to wake up a
+// process waiting for new events. For that, the collection is capped, i.e. has
+// a maximum size. This is necessary in order to allow creation of a tailable
+// cursor, which is fundamental for the required blocking behaviour.
+
 import (
 	"context"
 	"errors"
