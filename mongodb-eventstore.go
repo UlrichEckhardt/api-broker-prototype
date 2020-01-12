@@ -372,6 +372,10 @@ func (s *mongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-cha
 					fmt.Println("cancelled by context:", ctx.Err())
 					return
 				case notification := <-nch:
+					if notification == nil {
+						fmt.Println("notification channel closed")
+						return
+					}
 					fmt.Println("received notification", notification.ID())
 					continue
 				}
