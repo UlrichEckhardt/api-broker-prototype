@@ -19,6 +19,14 @@ import (
 	"time"
 )
 
+// The Event interface defines methods common to events.
+type Event interface {
+	// Class returns a string that identifies the event type.
+	// This is distinct from Go's type name because it should be
+	// agnostic of the language.
+	Class() string
+}
+
 // The Envelope is a container for the actual event, which it carries as
 // payload. In addition, it contains the time when the envelope was persisted
 // and an ID which is a sequence counter.
