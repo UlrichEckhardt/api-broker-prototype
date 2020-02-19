@@ -5,17 +5,12 @@ package main
 // behind it. Its main parts are functions to insert events and to follow
 // the stream of events.
 // TODO:
-//  - The payload is still represented as bson.M. This is a serialization format
-//    that is mainly used in the context of MongoDB. Firstly, this restricts all
-//    implementations to those supporting that format. Secondly, convenient use
-//    probably requires a kind of serialization service in between.
 //  - The ID is also specific to the default integer representation in MongoDB.
 //    For proper function, only a strict ordering is required, it doesn't have
 //    to take the form of an integer sequence.
 
 import (
 	"context"
-	"go.mongodb.org/mongo-driver/bson"
 	"time"
 )
 
@@ -35,8 +30,8 @@ type Envelope interface {
 	ID() int32
 	// Created returns the time the event was persisted.
 	Created() time.Time
-	// Payload returns the payload contained in the envelope.
-	Payload() bson.M
+	// Event returns the event contained in the envelope.
+	Event() Event
 }
 
 // Notification just carries the ID of a persisted event.
@@ -55,7 +50,7 @@ type EventStore interface {
 	Error() error
 	// Insert an event as payload into the store.
 	// The event is wrapped in an envelope and returned.
-	Insert(ctx context.Context, payload bson.M) Envelope
+	Insert(ctx context.Context, event Event) Envelope
 	// Retrieve just the event with the given ID.
 	RetrieveOne(ctx context.Context, id int32) Envelope
 	// Retrieve all currently existing events, which are provided via the returned channel.
