@@ -205,14 +205,7 @@ func (s *mongoDBEventStore) RetrieveOne(ctx context.Context, id int32) Envelope 
 		return nil
 	}
 
-	// decode and return the envelope
-	var envelope mongoDBEnvelope
-	if err := res.Decode(&envelope); err != nil {
-		s.err = err
-		return nil
-	}
-
-	return &envelope
+	return s.decodeEnvelope(res)
 }
 
 // retrieveNext retrieves the event following the one with the given ID.
@@ -240,9 +233,13 @@ func (s *mongoDBEventStore) retrieveNext(ctx context.Context, id int32) *mongoDB
 		return nil
 	}
 
-	// decode and return the envelope
+	return s.decodeEnvelope(res)
+}
+
+// decode the envelope from a MongoDB lookup
+func (s *mongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnvelope {
 	var envelope mongoDBEnvelope
-	if err := res.Decode(&envelope); err != nil {
+	if err := raw.Decode(&envelope); err != nil {
 		s.err = err
 		return nil
 	}
