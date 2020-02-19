@@ -52,18 +52,18 @@ func (note *mongoDBNotification) ID() int32 {
 	return note.IDVal
 }
 
-// mongoDBEventStore implements the EventStore interface using a MongoDB.
-type mongoDBEventStore struct {
+// MongoDBEventStore implements the EventStore interface using a MongoDB.
+type MongoDBEventStore struct {
 	events        *mongo.Collection
 	notifications *mongo.Collection
 	err           error
 	logger        log15.Logger
 }
 
-// NewEventStore creates and connects a mongoDBEventStore instance.
-func NewEventStore(logger log15.Logger) EventStore {
+// NewEventStore creates and connects a MongoDBEventStore instance.
+func NewEventStore(logger log15.Logger) *MongoDBEventStore {
 	logger.Debug("creating event store")
-	s := mongoDBEventStore{logger: logger}
+	s := MongoDBEventStore{logger: logger}
 	events, notifications, err := Connect()
 	if err == nil {
 		// initialize collections
@@ -77,7 +77,7 @@ func NewEventStore(logger log15.Logger) EventStore {
 }
 
 // ParseEventID implements the EventStore interface.
-func (s *mongoDBEventStore) ParseEventID(str string) (int32, error) {
+func (s *MongoDBEventStore) ParseEventID(str string) (int32, error) {
 	lp, err := strconv.ParseInt(str, 10, 32)
 	if err != nil {
 		return 0, err
@@ -86,12 +86,12 @@ func (s *mongoDBEventStore) ParseEventID(str string) (int32, error) {
 }
 
 // Error implements the EventStore interface.
-func (s *mongoDBEventStore) Error() error {
+func (s *MongoDBEventStore) Error() error {
 	return s.err
 }
 
 // Insert implements the EventStore interface.
-func (s *mongoDBEventStore) Insert(ctx context.Context, payload bson.M) Envelope {
+func (s *MongoDBEventStore) Insert(ctx context.Context, payload bson.M) Envelope {
 	s.logger.Debug("inserting event")
 
 	// don't do anything if the error state of the store is set already
@@ -152,7 +152,7 @@ func (s *mongoDBEventStore) Insert(ctx context.Context, payload bson.M) Envelope
 
 // find next free ID to use for an insert
 // This returns zero and sets the error state if an error occurs.
-func (s *mongoDBEventStore) findNextID(ctx context.Context) int32 {
+func (s *MongoDBEventStore) findNextID(ctx context.Context) int32 {
 	// find the event with the highest ID
 	opts := options.FindOne().
 		SetBatchSize(1).
@@ -179,7 +179,7 @@ func (s *mongoDBEventStore) findNextID(ctx context.Context) int32 {
 }
 
 // RetrieveOne implements the EventStore interface.
-func (s *mongoDBEventStore) RetrieveOne(ctx context.Context, id int32) Envelope {
+func (s *MongoDBEventStore) RetrieveOne(ctx context.Context, id int32) Envelope {
 	s.logger.Debug("loading event", "id", id)
 
 	// don't do anything if the error state of the store is set already
@@ -209,7 +209,7 @@ func (s *mongoDBEventStore) RetrieveOne(ctx context.Context, id int32) Envelope 
 }
 
 // retrieveNext retrieves the event following the one with the given ID.
-func (s *mongoDBEventStore) retrieveNext(ctx context.Context, id int32) *mongoDBEnvelope {
+func (s *MongoDBEventStore) retrieveNext(ctx context.Context, id int32) *mongoDBEnvelope {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil
@@ -248,7 +248,7 @@ func (s *mongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnve
 }
 
 // LoadEvents implements the EventStore interface.
-func (s *mongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan Envelope {
+func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan Envelope {
 	s.logger.Debug("loading events", "following", start)
 
 	out := make(chan Envelope)
@@ -297,7 +297,7 @@ func (s *mongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan 
 }
 
 // FollowNotifications implements the EventStore interface.
-func (s *mongoDBEventStore) FollowNotifications(ctx context.Context) <-chan Notification {
+func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) <-chan Notification {
 	s.logger.Debug("following notifications")
 
 	out := make(chan Notification)
@@ -339,7 +339,7 @@ func (s *mongoDBEventStore) FollowNotifications(ctx context.Context) <-chan Noti
 }
 
 // FollowEvents implements the EventStore interface.
-func (s *mongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-chan Envelope {
+func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-chan Envelope {
 	s.logger.Debug("following events")
 
 	out := make(chan Envelope)
