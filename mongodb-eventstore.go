@@ -20,6 +20,17 @@ import (
 	"time"
 )
 
+// The MongoDBEventCodec interface defines methods common to event codecs.
+// See also the Event interface, which it is closely related to.
+type MongoDBEventCodec interface {
+	// Class returns a string that identifies the event type this codec handles.
+	Class() string
+	// Serialize the event in a way that allows writing it to a MongoDB.
+	Serialize(event Event) (bson.M, error)
+	// Deserialize an event from data from a MongoDB.
+	Deserialize(data bson.M) (Event, error)
+}
+
 // mongoDBEnvelope implements the Envelope interface.
 type mongoDBEnvelope struct {
 	IDVal      int32              `bson:"_id"`
@@ -58,12 +69,16 @@ type MongoDBEventStore struct {
 	notifications *mongo.Collection
 	err           error
 	logger        log15.Logger
+	codecs        map[string]MongoDBEventCodec
 }
 
 // NewEventStore creates and connects a MongoDBEventStore instance.
 func NewEventStore(logger log15.Logger) *MongoDBEventStore {
 	logger.Debug("creating event store")
-	s := MongoDBEventStore{logger: logger}
+	s := MongoDBEventStore{
+		logger: logger,
+		codecs: make(map[string]MongoDBEventCodec),
+	}
 	events, notifications, err := Connect()
 	if err == nil {
 		// initialize collections
@@ -74,6 +89,14 @@ func NewEventStore(logger log15.Logger) *MongoDBEventStore {
 		s.err = err
 	}
 	return &s
+}
+
+// RegisterCodec registers a codec that allows conversion of Events.
+func (s *MongoDBEventStore) RegisterCodec(codec MongoDBEventCodec) {
+	if codec == nil {
+		s.err = errors.New("nil codec registered")
+	}
+	s.codecs[codec.Class()] = codec
 }
 
 // ParseEventID implements the EventStore interface.
