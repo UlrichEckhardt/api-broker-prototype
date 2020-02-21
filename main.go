@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/inconshreveable/log15"
 	"github.com/urfave/cli/v2" // imports as package "cli"
-	"go.mongodb.org/mongo-driver/bson"
 	"os"
 	"time"
 )
@@ -95,12 +94,17 @@ func initEventStore() error {
 	logger = log15.New("context", "event-store")
 	logger.SetHandler(log15.StdoutHandler)
 
-	store = NewEventStore(logger)
-	return store.Error()
+	s := NewEventStore(logger)
+	s.RegisterCodec(&simpleEventCodec{})
+	if e := s.Error(); e != nil {
+		return e
+	}
+	store = s
+	return nil
 }
 
 // insert a new event
-func insertMain(event string) error {
+func insertMain(message string) error {
 	if err := initEventStore(); err != nil {
 		return err
 	}
@@ -109,8 +113,8 @@ func insertMain(event string) error {
 	defer cancel()
 
 	// insert a document
-	payload := bson.M{"event": event}
-	envelope := store.Insert(ctx, payload)
+	event := simpleEvent{message: message}
+	envelope := store.Insert(ctx, &event)
 	if store.Error() != nil {
 		return store.Error()
 	}
@@ -142,7 +146,7 @@ func listMain(lastProcessed string) error {
 
 	// process events from the channel
 	for envelope := range ch {
-		logger.Info("received event", "id", envelope.ID(), "created", envelope.Created().Format(time.RFC3339), "payload", envelope.Payload())
+		logger.Info("received event", "id", envelope.ID(), "created", envelope.Created().Format(time.RFC3339), "event", envelope.Event())
 	}
 
 	return store.Error()
@@ -171,7 +175,7 @@ func processMain(lastProcessed string) error {
 
 	// process events from the channel
 	for envelope := range ch {
-		logger.Info("received event", "id", envelope.ID(), "created", envelope.Created().Format(time.RFC3339), "payload", envelope.Payload())
+		logger.Info("received event", "id", envelope.ID(), "created", envelope.Created().Format(time.RFC3339), "event", envelope.Event())
 	}
 
 	return store.Error()
