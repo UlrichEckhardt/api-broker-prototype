@@ -31,11 +31,19 @@ type MongoDBEventCodec interface {
 	Deserialize(data bson.M) (Event, error)
 }
 
+// mongoDBRawEnvelope is the type representing the envelope in MongoDB
+type mongoDBRawEnvelope struct {
+	ID      int32              `bson:"_id"`
+	Created primitive.DateTime `bson:"created"`
+	Class   string             `bson:"class"`
+	Data    bson.M             `bson:"data"`
+}
+
 // mongoDBEnvelope implements the Envelope interface.
 type mongoDBEnvelope struct {
-	IDVal      int32              `bson:"_id"`
-	CreatedVal primitive.DateTime `bson:"created"`
-	PayloadVal bson.M             `bson:"payload"`
+	IDVal      int32
+	CreatedVal primitive.DateTime
+	EventVal   Event
 }
 
 // ID implements the Envelope interface.
@@ -48,9 +56,9 @@ func (env *mongoDBEnvelope) Created() time.Time {
 	return env.CreatedVal.Time()
 }
 
-// Payload implements the Envelope interface.
-func (env *mongoDBEnvelope) Payload() bson.M {
-	return env.PayloadVal
+// Event implements the Envelope interface.
+func (env *mongoDBEnvelope) Event() Event {
+	return env.EventVal
 }
 
 // mongoDBNotification implements the Notification interface.
@@ -114,7 +122,7 @@ func (s *MongoDBEventStore) Error() error {
 }
 
 // Insert implements the EventStore interface.
-func (s *MongoDBEventStore) Insert(ctx context.Context, payload bson.M) Envelope {
+func (s *MongoDBEventStore) Insert(ctx context.Context, event Event) Envelope {
 	s.logger.Debug("inserting event")
 
 	// don't do anything if the error state of the store is set already
@@ -122,17 +130,35 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, payload bson.M) Envelope
 		return nil
 	}
 
-	env := mongoDBEnvelope{PayloadVal: payload}
+	//  locate codec for the event class
+	class := event.Class()
+	codec := s.codecs[class]
+	if codec == nil {
+		s.err = errors.New("failed to locate codec for event")
+		return nil
+	}
+
+	// encode event for MongoDB storage
+	payload, err := codec.Serialize(event)
+	if err != nil {
+		s.err = err
+		return nil
+	}
+
+	env := mongoDBRawEnvelope{
+		Class: class,
+		Data:  payload,
+	}
 
 	// generate an ID
-	env.IDVal = s.findNextID(ctx)
-	if env.IDVal == 0 {
+	env.ID = s.findNextID(ctx)
+	if env.ID == 0 {
 		return nil
 	}
 
 	for {
 		// set creation date
-		env.CreatedVal = primitive.NewDateTimeFromTime(time.Now())
+		env.Created = primitive.NewDateTimeFromTime(time.Now())
 
 		// insert new document
 		res, err := s.events.InsertOne(ctx, env)
@@ -140,9 +166,9 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, payload bson.M) Envelope
 			// Check if the next free ID changed. In that case,
 			// just try again with the new ID.
 			id := s.findNextID(ctx)
-			if id != env.IDVal {
+			if id != env.ID {
 				s.logger.Debug("retrying after race detection")
-				env.IDVal = id
+				env.ID = id
 				continue
 			}
 			s.err = err
@@ -155,7 +181,7 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, payload bson.M) Envelope
 			s.err = errors.New("no ID returned from insert")
 			return nil
 		}
-		if id != env.IDVal {
+		if id != env.ID {
 			s.err = errors.New("returned ID differs from written ID")
 		}
 		break
@@ -163,14 +189,18 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, payload bson.M) Envelope
 
 	// insert a notification with the created document's ID
 	var note mongoDBNotification
-	note.IDVal = env.IDVal
-	_, err := s.notifications.InsertOne(ctx, note)
+	note.IDVal = env.ID
+	_, err = s.notifications.InsertOne(ctx, note)
 	if err != nil {
 		s.err = err
 		return nil
 	}
 
-	return &env
+	return &mongoDBEnvelope{
+		IDVal:      env.ID,
+		CreatedVal: env.Created,
+		EventVal:   event,
+	}
 }
 
 // find next free ID to use for an insert
@@ -192,13 +222,13 @@ func (s *MongoDBEventStore) findNextID(ctx context.Context) int32 {
 	}
 
 	// decode and return the envelope's ID increased by one
-	var envelope mongoDBEnvelope
+	var envelope mongoDBRawEnvelope
 	if err := res.Decode(&envelope); err != nil {
 		s.err = err
 		return 0
 	}
 
-	return envelope.IDVal + 1
+	return envelope.ID + 1
 }
 
 // RetrieveOne implements the EventStore interface.
@@ -260,14 +290,30 @@ func (s *MongoDBEventStore) retrieveNext(ctx context.Context, id int32) *mongoDB
 }
 
 // decode the envelope from a MongoDB lookup
-func (s *mongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnvelope {
-	var envelope mongoDBEnvelope
+func (s *MongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnvelope {
+	var envelope mongoDBRawEnvelope
 	if err := raw.Decode(&envelope); err != nil {
 		s.err = err
 		return nil
 	}
 
-	return &envelope
+	codec := s.codecs[envelope.Class]
+	if codec == nil {
+		s.err = errors.New("no codec found for class " + envelope.Class)
+		return nil
+	}
+
+	event, err := codec.Deserialize(envelope.Data)
+	if err != nil {
+		s.err = err
+		return nil
+	}
+
+	return &mongoDBEnvelope{
+		IDVal:      envelope.ID,
+		CreatedVal: envelope.Created,
+		EventVal:   event,
+	}
 }
 
 // LoadEvents implements the EventStore interface.
