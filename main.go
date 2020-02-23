@@ -25,10 +25,10 @@ func main() {
 				ArgsUsage: "<event>",
 				Action: func(c *cli.Context) error {
 					args := c.Args()
-					if args.Len() != 1 {
-						return errors.New("exactly one argument expected")
+					if args.Len() != 2 {
+						return errors.New("exactly two arguments expected")
 					}
-					return insertMain(args.First())
+					return insertMain(args.Get(0), args.Get(1))
 				},
 			},
 			{
@@ -96,6 +96,9 @@ func initEventStore() error {
 
 	s := NewEventStore(logger)
 	s.RegisterCodec(&simpleEventCodec{})
+	s.RegisterCodec(&requestEventCodec{})
+	s.RegisterCodec(&responseEventCodec{})
+	s.RegisterCodec(&failureEventCodec{})
 	if e := s.Error(); e != nil {
 		return e
 	}
@@ -104,7 +107,7 @@ func initEventStore() error {
 }
 
 // insert a new event
-func insertMain(message string) error {
+func insertMain(class string, data string) error {
 	if err := initEventStore(); err != nil {
 		return err
 	}
@@ -112,9 +115,21 @@ func insertMain(message string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// create the event from the commandline arguments
+	var event Event
+	switch class {
+	case "simple":
+		event = &simpleEvent{message: data}
+	case "request":
+		event = &requestEvent{request: data}
+	case "response":
+		event = &responseEvent{response: data}
+	case "failure":
+		event = &failureEvent{failure: data}
+	}
+
 	// insert a document
-	event := simpleEvent{message: message}
-	envelope := store.Insert(ctx, &event)
+	envelope := store.Insert(ctx, event)
 	if store.Error() != nil {
 		return store.Error()
 	}
