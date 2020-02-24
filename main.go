@@ -442,6 +442,12 @@ func processMain(lastProcessed string) error {
 	}
 	defer finalizeEventStore(store)
 
+	// wrap the actual event store with the timeout handling decorator
+	store, err = events.NewTimeoutEventStoreDecorator(store, logger)
+	if err != nil {
+		return err
+	}
+
 	// parse optional event ID
 	var lastProcessedID int32
 	if lastProcessed != "" {
