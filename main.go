@@ -119,13 +119,13 @@ func insertMain(class string, data string) error {
 	var event Event
 	switch class {
 	case "simple":
-		event = &simpleEvent{message: data}
+		event = simpleEvent{message: data}
 	case "request":
-		event = &requestEvent{request: data}
+		event = requestEvent{request: data}
 	case "response":
-		event = &responseEvent{response: data}
+		event = responseEvent{response: data}
 	case "failure":
-		event = &failureEvent{failure: data}
+		event = failureEvent{failure: data}
 	}
 
 	// insert a document
