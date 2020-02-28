@@ -23,12 +23,19 @@ func main() {
 				Name:      "insert",
 				Usage:     "Insert an event into the store.",
 				ArgsUsage: "<event>",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "causation",
+						Value: "0",
+						Usage: "`ID` of the event to register as causation",
+					},
+				},
 				Action: func(c *cli.Context) error {
 					args := c.Args()
 					if args.Len() != 2 {
 						return errors.New("exactly two arguments expected")
 					}
-					return insertMain(args.Get(0), args.Get(1))
+					return insertMain(args.Get(0), args.Get(1), c.String("causation"))
 				},
 			},
 			{
@@ -107,7 +114,7 @@ func initEventStore() error {
 }
 
 // insert a new event
-func insertMain(class string, data string) error {
+func insertMain(class string, data string, causation string) error {
 	if err := initEventStore(); err != nil {
 		return err
 	}
@@ -130,8 +137,14 @@ func insertMain(class string, data string) error {
 		return errors.New("unrecognized event class")
 	}
 
+	// parse causation ID
+	causationID, err := store.ParseEventID(causation)
+	if err != nil {
+		return err
+	}
+
 	// insert a document
-	envelope := store.Insert(ctx, event)
+	envelope := store.Insert(ctx, event, causationID)
 	if store.Error() != nil {
 		return store.Error()
 	}
@@ -163,7 +176,13 @@ func listMain(lastProcessed string) error {
 
 	// process events from the channel
 	for envelope := range ch {
-		logger.Info("received event", "id", envelope.ID(), "created", envelope.Created().Format(time.RFC3339), "event", envelope.Event())
+		logger.Info(
+			"event",
+			"id", envelope.ID(),
+			"class", envelope.Event().Class(),
+			"created", envelope.Created().Format(time.RFC3339),
+			"causation_id", envelope.CausationID(),
+		)
 	}
 
 	return store.Error()
@@ -192,7 +211,13 @@ func processMain(lastProcessed string) error {
 
 	// process events from the channel
 	for envelope := range ch {
-		logger.Info("processing event", "class", envelope.Event().Class(), "created", envelope.Created().Format(time.RFC3339), "id", envelope.ID())
+		logger.Info(
+			"processing event",
+			"id", envelope.ID(),
+			"class", envelope.Event().Class(),
+			"created", envelope.Created().Format(time.RFC3339),
+			"causation_id", envelope.CausationID(),
+		)
 
 		switch event := envelope.Event().(type) {
 		case requestEvent:
@@ -203,9 +228,9 @@ func processMain(lastProcessed string) error {
 
 				// store results as event
 				if err == nil {
-					store.Insert(ctx, responseEvent{response: response})
+					store.Insert(ctx, responseEvent{response: response}, envelope.ID())
 				} else {
-					store.Insert(ctx, failureEvent{failure: err.Error()})
+					store.Insert(ctx, failureEvent{failure: err.Error()}, envelope.ID())
 				}
 			}()
 		}

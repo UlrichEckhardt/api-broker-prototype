@@ -33,17 +33,19 @@ type MongoDBEventCodec interface {
 
 // mongoDBRawEnvelope is the type representing the envelope in MongoDB
 type mongoDBRawEnvelope struct {
-	ID      int32              `bson:"_id"`
-	Created primitive.DateTime `bson:"created"`
-	Class   string             `bson:"class"`
-	Data    bson.M             `bson:"data"`
+	ID          int32              `bson:"_id"`
+	Created     primitive.DateTime `bson:"created"`
+	CausationID int32              `bson:"causation_id"`
+	Class       string             `bson:"class"`
+	Data        bson.M             `bson:"data"`
 }
 
 // mongoDBEnvelope implements the Envelope interface.
 type mongoDBEnvelope struct {
-	IDVal      int32
-	CreatedVal primitive.DateTime
-	EventVal   Event
+	IDVal          int32
+	CreatedVal     primitive.DateTime
+	CausationIDVal int32
+	EventVal       Event
 }
 
 // ID implements the Envelope interface.
@@ -54,6 +56,11 @@ func (env *mongoDBEnvelope) ID() int32 {
 // Created implements the Envelope interface.
 func (env *mongoDBEnvelope) Created() time.Time {
 	return env.CreatedVal.Time()
+}
+
+// CausationID implements the Envelope interface.
+func (env *mongoDBEnvelope) CausationID() int32 {
+	return env.CausationIDVal
 }
 
 // Event implements the Envelope interface.
@@ -122,7 +129,7 @@ func (s *MongoDBEventStore) Error() error {
 }
 
 // Insert implements the EventStore interface.
-func (s *MongoDBEventStore) Insert(ctx context.Context, event Event) Envelope {
+func (s *MongoDBEventStore) Insert(ctx context.Context, event Event, causationID int32) Envelope {
 	s.logger.Debug("inserting event")
 
 	// don't do anything if the error state of the store is set already
@@ -146,8 +153,9 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, event Event) Envelope {
 	}
 
 	env := mongoDBRawEnvelope{
-		Class: class,
-		Data:  payload,
+		CausationID: causationID,
+		Class:       class,
+		Data:        payload,
 	}
 
 	// generate an ID
@@ -310,9 +318,10 @@ func (s *MongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnve
 	}
 
 	return &mongoDBEnvelope{
-		IDVal:      envelope.ID,
-		CreatedVal: envelope.Created,
-		EventVal:   event,
+		IDVal:          envelope.ID,
+		CreatedVal:     envelope.Created,
+		CausationIDVal: envelope.CausationID,
+		EventVal:       event,
 	}
 }
 

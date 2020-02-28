@@ -30,6 +30,9 @@ type Envelope interface {
 	ID() int32
 	// Created returns the time the event was persisted.
 	Created() time.Time
+	// CausationID returns the ID of the event that caused this event.
+	// This can be zero if this event was not caused by another event.
+	CausationID() int32
 	// Event returns the event contained in the envelope.
 	Event() Event
 }
@@ -50,7 +53,9 @@ type EventStore interface {
 	Error() error
 	// Insert an event as payload into the store.
 	// The event is wrapped in an envelope and returned.
-	Insert(ctx context.Context, event Event) Envelope
+	// The causation ID is that of the preceding event that caused this new
+	// event. It can be zero when its cause is not a preceding event.
+	Insert(ctx context.Context, event Event, causationID int32) Envelope
 	// Retrieve just the event with the given ID.
 	RetrieveOne(ctx context.Context, id int32) Envelope
 	// Retrieve all currently existing events, which are provided via the returned channel.
