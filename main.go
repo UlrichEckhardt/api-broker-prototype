@@ -135,6 +135,7 @@ func initEventStore() error {
 	esLogger.SetHandler(handler)
 
 	s := NewEventStore(esLogger)
+	s.RegisterCodec(&configurationEventCodec{})
 	s.RegisterCodec(&simpleEventCodec{})
 	s.RegisterCodec(&requestEventCodec{})
 	s.RegisterCodec(&responseEventCodec{})
@@ -260,7 +261,7 @@ func processMain(lastProcessed string) error {
 	ch := store.FollowEvents(ctx, lastProcessedID)
 
 	// number of retries after a failed request
-	retries := uint(2)
+	retries := uint(0)
 
 	// map of requests being processed currently
 	type requestState struct {
@@ -281,6 +282,15 @@ func processMain(lastProcessed string) error {
 		)
 
 		switch event := envelope.Event().(type) {
+		case configurationEvent:
+			logger.Info(
+				"updating API configuration",
+				"retries", event.retries,
+			)
+
+			// store configuration
+			retries = uint(event.retries)
+
 		case requestEvent:
 			logger.Info("starting API call")
 
