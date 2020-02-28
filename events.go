@@ -9,7 +9,7 @@ type simpleEvent struct {
 }
 
 // Class implements the Event interface.
-func (e *simpleEvent) Class() string {
+func (e simpleEvent) Class() string {
 	return "simple"
 }
 
@@ -19,7 +19,7 @@ type requestEvent struct {
 }
 
 // Class implements the Event interface.
-func (e *requestEvent) Class() string {
+func (e requestEvent) Class() string {
 	return "request"
 }
 
@@ -31,7 +31,7 @@ type responseEvent struct {
 }
 
 // Class implements the Event interface.
-func (e *responseEvent) Class() string {
+func (e responseEvent) Class() string {
 	return "response"
 }
 
@@ -43,6 +43,6 @@ type failureEvent struct {
 }
 
 // Class implements the Event interface.
-func (e *failureEvent) Class() string {
+func (e failureEvent) Class() string {
 	return "failure"
 }

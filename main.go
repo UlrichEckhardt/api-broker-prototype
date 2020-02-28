@@ -119,13 +119,13 @@ func insertMain(class string, data string) error {
 	var event Event
 	switch class {
 	case "simple":
-		event = &simpleEvent{message: data}
+		event = simpleEvent{message: data}
 	case "request":
-		event = &requestEvent{request: data}
+		event = requestEvent{request: data}
 	case "response":
-		event = &responseEvent{response: data}
+		event = responseEvent{response: data}
 	case "failure":
-		event = &failureEvent{failure: data}
+		event = failureEvent{failure: data}
 	}
 
 	// insert a document
@@ -190,7 +190,23 @@ func processMain(lastProcessed string) error {
 
 	// process events from the channel
 	for envelope := range ch {
-		logger.Info("received event", "id", envelope.ID(), "created", envelope.Created().Format(time.RFC3339), "event", envelope.Event())
+		logger.Info("processing event", "class", envelope.Event().Class(), "created", envelope.Created().Format(time.RFC3339), "id", envelope.ID())
+
+		switch event := envelope.Event().(type) {
+		case requestEvent:
+			// trigger event processing asynchronously
+			go func() {
+				// delegate to API stub
+				response, err := ProcessRequest(event.request)
+
+				// store results as event
+				if err == nil {
+					store.Insert(ctx, responseEvent{response: response})
+				} else {
+					store.Insert(ctx, failureEvent{failure: err.Error()})
+				}
+			}()
+		}
 	}
 
 	return store.Error()

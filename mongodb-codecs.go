@@ -16,14 +16,15 @@ func (codec *simpleEventCodec) Class() string {
 
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *simpleEventCodec) Serialize(e Event) (bson.M, error) {
-	ev := e.(*simpleEvent)
+	ev := e.(simpleEvent)
 	return bson.M{"message": ev.message}, nil
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
 func (codec *simpleEventCodec) Deserialize(data bson.M) (Event, error) {
-	res := new(simpleEvent)
-	res.message = data["message"].(string)
+	res := simpleEvent{
+		message: data["message"].(string),
+	}
 	return res, nil
 }
 
@@ -37,7 +38,7 @@ func (codec *requestEventCodec) Class() string {
 
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *requestEventCodec) Serialize(e Event) (bson.M, error) {
-	ev := e.(*requestEvent)
+	ev := e.(requestEvent)
 	return bson.M{"request": ev.request}, nil
 }
 
@@ -46,7 +47,7 @@ func (codec *requestEventCodec) Deserialize(data bson.M) (Event, error) {
 	res := requestEvent{
 		request: data["request"].(string),
 	}
-	return &res, nil
+	return res, nil
 }
 
 // MongoDB codec for responseEvents.
@@ -59,7 +60,7 @@ func (codec *responseEventCodec) Class() string {
 
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *responseEventCodec) Serialize(e Event) (bson.M, error) {
-	ev := e.(*responseEvent)
+	ev := e.(responseEvent)
 	return bson.M{"response": ev.response}, nil
 }
 
@@ -68,7 +69,7 @@ func (codec *responseEventCodec) Deserialize(data bson.M) (Event, error) {
 	res := responseEvent{
 		response: data["response"].(string),
 	}
-	return &res, nil
+	return res, nil
 }
 
 // MongoDB codec for failureEvents.
@@ -81,7 +82,7 @@ func (codec *failureEventCodec) Class() string {
 
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *failureEventCodec) Serialize(e Event) (bson.M, error) {
-	ev := e.(*failureEvent)
+	ev := e.(failureEvent)
 	return bson.M{"failure": ev.failure}, nil
 }
 
@@ -90,5 +91,5 @@ func (codec *failureEventCodec) Deserialize(data bson.M) (Event, error) {
 	res := failureEvent{
 		failure: data["failure"].(string),
 	}
-	return &res, nil
+	return res, nil
 }
