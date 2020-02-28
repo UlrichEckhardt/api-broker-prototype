@@ -1,5 +1,6 @@
 Prototype for an event-driven API broker
 
+![Go](https://github.com/UlrichEckhardt/api-broker-prototype/workflows/Go/badge.svg)
 
 This is a prototype for a pattern to access APIs.
 
