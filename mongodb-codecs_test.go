@@ -115,6 +115,24 @@ func TestSimpleCodec(t *testing.T) {
 	}
 }
 
+func TestConfigurationCodec(t *testing.T) {
+	cases := map[string]testcase{
+		"test configuration": {
+			event: configurationEvent{
+				retries: 2,
+			},
+			data: bson.M{
+				"retries": int32(2),
+			},
+		},
+	}
+
+	var codec configurationEventCodec
+	for name, c := range cases {
+		runTestcase(name, c, &codec, t)
+	}
+}
+
 func TestRequestCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test request": {
