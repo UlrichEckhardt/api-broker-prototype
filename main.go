@@ -126,6 +126,8 @@ func insertMain(class string, data string) error {
 		event = responseEvent{response: data}
 	case "failure":
 		event = failureEvent{failure: data}
+	default:
+		return errors.New("unrecognized event class")
 	}
 
 	// insert a document
