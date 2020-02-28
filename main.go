@@ -245,6 +245,12 @@ func processMain(lastProcessed string) error {
 
 	ch := store.FollowEvents(ctx, lastProcessedID)
 
+	// map of requests being processed currently
+	type requestState struct {
+		request Envelope
+	}
+	calls := make(map[int32]*requestState)
+
 	// process events from the channel
 	for envelope := range ch {
 		logger.Info(
@@ -257,6 +263,13 @@ func processMain(lastProcessed string) error {
 
 		switch event := envelope.Event().(type) {
 		case requestEvent:
+			logger.Info("starting API call")
+
+			// create record to correlate the response with it
+			calls[envelope.ID()] = &requestState{
+				request: envelope,
+			}
+
 			// trigger event processing asynchronously
 			go func(event requestEvent, causationID int32) {
 				// delegate to API stub
@@ -269,6 +282,38 @@ func processMain(lastProcessed string) error {
 					store.Insert(ctx, failureEvent{failure: err.Error()}, causationID)
 				}
 			}(event, envelope.ID())
+
+		case responseEvent:
+			// fetch the request event
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("response event lacks a causation ID to locate the request")
+				break
+			}
+			call := calls[requestID]
+			if call == nil {
+				logger.Error("failed to locate request event")
+				break
+			}
+
+			delete(calls, requestID)
+			logger.Info("completed API call")
+
+		case failureEvent:
+			// fetch the request event
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("failure event lacks a causation ID to locate the request")
+				break
+			}
+			call := calls[requestID]
+			if call == nil {
+				logger.Error("failed to locate request event")
+				break
+			}
+
+			delete(calls, requestID)
+			logger.Info("failed API call")
 		}
 	}
 
