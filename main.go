@@ -258,17 +258,17 @@ func processMain(lastProcessed string) error {
 		switch event := envelope.Event().(type) {
 		case requestEvent:
 			// trigger event processing asynchronously
-			go func() {
+			go func(event requestEvent, causationID int32) {
 				// delegate to API stub
 				response, err := ProcessRequest(event.request)
 
 				// store results as event
 				if err == nil {
-					store.Insert(ctx, responseEvent{response: response}, envelope.ID())
+					store.Insert(ctx, responseEvent{response: response}, causationID)
 				} else {
-					store.Insert(ctx, failureEvent{failure: err.Error()}, envelope.ID())
+					store.Insert(ctx, failureEvent{failure: err.Error()}, causationID)
 				}
-			}()
+			}(event, envelope.ID())
 		}
 	}
 
