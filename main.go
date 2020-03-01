@@ -245,9 +245,13 @@ func processMain(lastProcessed string) error {
 
 	ch := store.FollowEvents(ctx, lastProcessedID)
 
+	// number of retries after a failed request
+	retries := uint(2)
+
 	// map of requests being processed currently
 	type requestState struct {
 		request Envelope
+		retries uint // number of retries left
 	}
 	calls := make(map[int32]*requestState)
 
@@ -268,6 +272,7 @@ func processMain(lastProcessed string) error {
 			// create record to correlate the response with it
 			calls[envelope.ID()] = &requestState{
 				request: envelope,
+				retries: retries,
 			}
 
 			// trigger event processing asynchronously
@@ -312,8 +317,26 @@ func processMain(lastProcessed string) error {
 				break
 			}
 
-			delete(calls, requestID)
-			logger.Info("failed API call")
+			// check if any retries remain
+			if call.retries == 0 {
+				delete(calls, requestID)
+				logger.Info("failed API call")
+				break
+			}
+
+			// decrement retry counter and try again asynchronously
+			call.retries--
+			go func(event requestEvent, causationID int32) {
+				// delegate to API stub
+				response, err := ProcessRequest(event.request)
+
+				// store results as event
+				if err == nil {
+					store.Insert(ctx, responseEvent{response: response}, causationID)
+				} else {
+					store.Insert(ctx, failureEvent{failure: err.Error()}, causationID)
+				}
+			}(call.request.Event().(requestEvent), call.request.ID())
 		}
 	}
 
