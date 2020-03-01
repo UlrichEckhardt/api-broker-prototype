@@ -66,6 +66,21 @@ func main() {
 				Usage:     "process events from the store",
 				ArgsUsage: " ", // no arguments expected
 				Flags: []cli.Flag{
+					&cli.Float64Flag{
+						Name:  "api-failure-rate",
+						Value: 0.0,
+						Usage: "Fraction of API requests that fail.",
+					},
+					&cli.Float64Flag{
+						Name:  "api-min-latency",
+						Value: 0.0,
+						Usage: "Minimal API latency.",
+					},
+					&cli.Float64Flag{
+						Name:  "api-max-latency",
+						Value: 0.0,
+						Usage: "Maximal API latency.",
+					},
 					&cli.StringFlag{
 						Name:  "start-after",
 						Value: "",
@@ -76,6 +91,7 @@ func main() {
 					if c.NArg() > 0 {
 						return errors.New("no arguments expected")
 					}
+					configureAPIStub(c)
 
 					return processMain(c.String("start-after"))
 				},
@@ -99,6 +115,15 @@ func main() {
 		logger.Debug("command exited with error", "error", err)
 		return
 	}
+}
+
+// configure API stub from optional flags passed on the commandline
+func configureAPIStub(c *cli.Context) {
+	ConfigureStub(
+		c.Float64("api-failure-rate"),
+		c.Float64("api-min-latency"),
+		c.Float64("api-max-latency"),
+	)
 }
 
 func initEventStore() error {
