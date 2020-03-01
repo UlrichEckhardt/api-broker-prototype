@@ -15,6 +15,10 @@ var (
 )
 
 func main() {
+	// setup logger
+	logger = log15.New("context", "main")
+	logger.SetHandler(log15.StdoutHandler)
+
 	app := cli.App{
 		Name:  "api-broker-prototype",
 		Usage: "prototype for an event-sourcing inspired API binding",
@@ -62,6 +66,21 @@ func main() {
 				Usage:     "process events from the store",
 				ArgsUsage: " ", // no arguments expected
 				Flags: []cli.Flag{
+					&cli.Float64Flag{
+						Name:  "api-failure-rate",
+						Value: 0.0,
+						Usage: "Fraction of API requests that fail.",
+					},
+					&cli.Float64Flag{
+						Name:  "api-min-latency",
+						Value: 0.0,
+						Usage: "Minimal API latency.",
+					},
+					&cli.Float64Flag{
+						Name:  "api-max-latency",
+						Value: 0.0,
+						Usage: "Maximal API latency.",
+					},
 					&cli.StringFlag{
 						Name:  "start-after",
 						Value: "",
@@ -72,6 +91,7 @@ func main() {
 					if c.NArg() > 0 {
 						return errors.New("no arguments expected")
 					}
+					configureAPIStub(c)
 
 					return processMain(c.String("start-after"))
 				},
@@ -97,11 +117,24 @@ func main() {
 	}
 }
 
-func initEventStore() error {
-	logger = log15.New("context", "event-store")
-	logger.SetHandler(log15.StdoutHandler)
+// configure API stub from optional flags passed on the commandline
+func configureAPIStub(c *cli.Context) {
+	ConfigureStub(
+		c.Float64("api-failure-rate"),
+		c.Float64("api-min-latency"),
+		c.Float64("api-max-latency"),
+	)
+}
 
-	s := NewEventStore(logger)
+func initEventStore() error {
+	// setup log handler
+	handler := log15.LvlFilterHandler(log15.LvlInfo, logger.GetHandler())
+
+	// setup logger for event store
+	esLogger := log15.New("context", "event store")
+	esLogger.SetHandler(handler)
+
+	s := NewEventStore(esLogger)
 	s.RegisterCodec(&simpleEventCodec{})
 	s.RegisterCodec(&requestEventCodec{})
 	s.RegisterCodec(&responseEventCodec{})
@@ -110,6 +143,9 @@ func initEventStore() error {
 		return e
 	}
 	store = s
+
+	logger.Info("initialized event store")
+
 	return nil
 }
 
