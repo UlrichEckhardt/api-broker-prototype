@@ -224,6 +224,19 @@ func listMain(lastProcessed string) error {
 	return store.Error()
 }
 
+// utility function to invoke the API and store the result as event
+func callAPI(ctx context.Context, store EventStore, event requestEvent, causationID int32) {
+	// delegate to API stub
+	response, err := ProcessRequest(event.request)
+
+	// store results as event
+	if err == nil {
+		store.Insert(ctx, responseEvent{response: response}, causationID)
+	} else {
+		store.Insert(ctx, failureEvent{failure: err.Error()}, causationID)
+	}
+}
+
 // process existing elements
 func processMain(lastProcessed string) error {
 	if err := initEventStore(); err != nil {
@@ -245,6 +258,16 @@ func processMain(lastProcessed string) error {
 
 	ch := store.FollowEvents(ctx, lastProcessedID)
 
+	// number of retries after a failed request
+	retries := uint(2)
+
+	// map of requests being processed currently
+	type requestState struct {
+		request Envelope
+		retries uint // number of retries left
+	}
+	calls := make(map[int32]*requestState)
+
 	// process events from the channel
 	for envelope := range ch {
 		logger.Info(
@@ -257,18 +280,56 @@ func processMain(lastProcessed string) error {
 
 		switch event := envelope.Event().(type) {
 		case requestEvent:
-			// trigger event processing asynchronously
-			go func() {
-				// delegate to API stub
-				response, err := ProcessRequest(event.request)
+			logger.Info("starting API call")
 
-				// store results as event
-				if err == nil {
-					store.Insert(ctx, responseEvent{response: response}, envelope.ID())
-				} else {
-					store.Insert(ctx, failureEvent{failure: err.Error()}, envelope.ID())
-				}
-			}()
+			// create record to correlate the response with it
+			calls[envelope.ID()] = &requestState{
+				request: envelope,
+				retries: retries,
+			}
+
+			// trigger event processing asynchronously
+			go callAPI(ctx, store, event, envelope.ID())
+
+		case responseEvent:
+			// fetch the request event
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("response event lacks a causation ID to locate the request")
+				break
+			}
+			call := calls[requestID]
+			if call == nil {
+				logger.Error("failed to locate request event")
+				break
+			}
+
+			delete(calls, requestID)
+			logger.Info("completed API call")
+
+		case failureEvent:
+			// fetch the request event
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("failure event lacks a causation ID to locate the request")
+				break
+			}
+			call := calls[requestID]
+			if call == nil {
+				logger.Error("failed to locate request event")
+				break
+			}
+
+			// check if any retries remain
+			if call.retries == 0 {
+				delete(calls, requestID)
+				logger.Info("failed API call")
+				break
+			}
+
+			// decrement retry counter and try again asynchronously
+			call.retries--
+			go callAPI(ctx, store, call.request.Event().(requestEvent), call.request.ID())
 		}
 	}
 
