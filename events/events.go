@@ -82,3 +82,18 @@ type APIFailureEvent struct {
 func (e APIFailureEvent) Class() string {
 	return "api-failure"
 }
+
+// the APITimeoutEvent signals that the timeout for a response has elapsed
+// Note that this event is only meaningful if neither response nor failure
+// occurred. Further, if a response is received after this timeout event, an
+// interpretation would most likely use that and ignore the timeout. This
+// event type is only tied to the attempt that timed out and doesn't carry
+// any further data, simply because it represents the absence of data.
+type APITimeoutEvent struct {
+	Attempt uint // zero-based index of the attempt
+}
+
+// Class implements the Event interface.
+func (e APITimeoutEvent) Class() string {
+	return "api-timeout"
+}
