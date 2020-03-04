@@ -224,6 +224,19 @@ func listMain(lastProcessed string) error {
 	return store.Error()
 }
 
+// utility function to invoke the API and store the result as event
+func callAPI(ctx context.Context, store EventStore, event requestEvent, causationID int32) {
+	// delegate to API stub
+	response, err := ProcessRequest(event.request)
+
+	// store results as event
+	if err == nil {
+		store.Insert(ctx, responseEvent{response: response}, causationID)
+	} else {
+		store.Insert(ctx, failureEvent{failure: err.Error()}, causationID)
+	}
+}
+
 // process existing elements
 func processMain(lastProcessed string) error {
 	if err := initEventStore(); err != nil {
@@ -276,17 +289,7 @@ func processMain(lastProcessed string) error {
 			}
 
 			// trigger event processing asynchronously
-			go func(event requestEvent, causationID int32) {
-				// delegate to API stub
-				response, err := ProcessRequest(event.request)
-
-				// store results as event
-				if err == nil {
-					store.Insert(ctx, responseEvent{response: response}, causationID)
-				} else {
-					store.Insert(ctx, failureEvent{failure: err.Error()}, causationID)
-				}
-			}(event, envelope.ID())
+			go callAPI(ctx, store, event, envelope.ID())
 
 		case responseEvent:
 			// fetch the request event
@@ -326,17 +329,7 @@ func processMain(lastProcessed string) error {
 
 			// decrement retry counter and try again asynchronously
 			call.retries--
-			go func(event requestEvent, causationID int32) {
-				// delegate to API stub
-				response, err := ProcessRequest(event.request)
-
-				// store results as event
-				if err == nil {
-					store.Insert(ctx, responseEvent{response: response}, causationID)
-				} else {
-					store.Insert(ctx, failureEvent{failure: err.Error()}, causationID)
-				}
-			}(call.request.Event().(requestEvent), call.request.ID())
+			go callAPI(ctx, store, call.request.Event().(requestEvent), call.request.ID())
 		}
 	}
 
