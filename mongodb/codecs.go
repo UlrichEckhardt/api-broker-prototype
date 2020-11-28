@@ -88,6 +88,7 @@ func (codec *ResponseEventCodec) Class() string {
 func (codec *ResponseEventCodec) Serialize(e events.Event) (bson.M, error) {
 	ev := e.(events.ResponseEvent)
 	res := bson.M{
+		"attempt":  int64(ev.Attempt),
 		"response": ev.Response,
 	}
 	return res, nil
@@ -96,6 +97,7 @@ func (codec *ResponseEventCodec) Serialize(e events.Event) (bson.M, error) {
 // Deserialize implements the MongoDBEventCodec interface.
 func (codec *ResponseEventCodec) Deserialize(data bson.M) (events.Event, error) {
 	res := events.ResponseEvent{
+		Attempt:  uint(data["attempt"].(int64)),
 		Response: data["response"].(string),
 	}
 	return res, nil
@@ -113,6 +115,7 @@ func (codec *FailureEventCodec) Class() string {
 func (codec *FailureEventCodec) Serialize(e events.Event) (bson.M, error) {
 	ev := e.(events.FailureEvent)
 	res := bson.M{
+		"attempt": int64(ev.Attempt),
 		"failure": ev.Failure,
 	}
 	return res, nil
@@ -121,6 +124,7 @@ func (codec *FailureEventCodec) Serialize(e events.Event) (bson.M, error) {
 // Deserialize implements the MongoDBEventCodec interface.
 func (codec *FailureEventCodec) Deserialize(data bson.M) (events.Event, error) {
 	res := events.FailureEvent{
+		Attempt: uint(data["attempt"].(int64)),
 		Failure: data["failure"].(string),
 	}
 	return res, nil
