@@ -8,6 +8,9 @@
 Dockerfile
 .dockerignore
 
+docker-compose.yml
+docker-compose.d/
+
 #
 # Everything below is just a copy of .gitignore
 #
