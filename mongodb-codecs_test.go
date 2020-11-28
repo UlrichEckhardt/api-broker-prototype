@@ -101,11 +101,17 @@ func TestSimpleCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test 1": {
 			event: simpleEvent{},
-			data:  bson.M{"message": ""},
+			data: bson.M{
+				"message": "",
+			},
 		},
 		"test 2": {
-			event: simpleEvent{message: "some message"},
-			data:  bson.M{"message": "some message"},
+			event: simpleEvent{
+				message: "some message",
+			},
+			data: bson.M{
+				"message": "some message",
+			},
 		},
 	}
 
@@ -136,8 +142,12 @@ func TestConfigurationCodec(t *testing.T) {
 func TestRequestCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test request": {
-			event: requestEvent{request: "some request"},
-			data:  bson.M{"request": "some request"},
+			event: requestEvent{
+				request: "some request",
+			},
+			data: bson.M{
+				"request": "some request",
+			},
 		},
 	}
 
@@ -150,8 +160,12 @@ func TestRequestCodec(t *testing.T) {
 func TestResponseCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test response": {
-			event: responseEvent{response: "some response"},
-			data:  bson.M{"response": "some response"},
+			event: responseEvent{
+				response: "some response",
+			},
+			data: bson.M{
+				"response": "some response",
+			},
 		},
 	}
 
@@ -164,8 +178,12 @@ func TestResponseCodec(t *testing.T) {
 func TestFailureCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test failure": {
-			event: failureEvent{failure: "some failure"},
-			data:  bson.M{"failure": "some failure"},
+			event: failureEvent{
+				failure: "some failure",
+			},
+			data: bson.M{
+				"failure": "some failure",
+			},
 		},
 	}
 
