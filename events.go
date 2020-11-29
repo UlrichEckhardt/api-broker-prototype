@@ -13,6 +13,17 @@ func (e simpleEvent) Class() string {
 	return "simple"
 }
 
+// configurationEvent models an event that contains configuration settings
+// for the way the API is used.
+type configurationEvent struct {
+	retries int32 // number of retries after a failure
+}
+
+// Class implements the Event interface.
+func (e configurationEvent) Class() string {
+	return "configuration"
+}
+
 // the requestEvent represents a request that should be sent to the API
 type requestEvent struct {
 	request string

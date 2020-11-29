@@ -28,6 +28,28 @@ func (codec *simpleEventCodec) Deserialize(data bson.M) (Event, error) {
 	return res, nil
 }
 
+// MongoDB codec for configurationEvents.
+type configurationEventCodec struct{}
+
+// Class implements the MongoDBEventCodec interface.
+func (codec *configurationEventCodec) Class() string {
+	return "configuration"
+}
+
+// Serialize implements the MongoDBEventCodec interface.
+func (codec *configurationEventCodec) Serialize(e Event) (bson.M, error) {
+	ev := e.(configurationEvent)
+	return bson.M{"retries": ev.retries}, nil
+}
+
+// Deserialize implements the MongoDBEventCodec interface.
+func (codec *configurationEventCodec) Deserialize(data bson.M) (Event, error) {
+	res := configurationEvent{
+		retries: data["retries"].(int32),
+	}
+	return res, nil
+}
+
 // MongoDB codec for requestEvents.
 type requestEventCodec struct{}
 
