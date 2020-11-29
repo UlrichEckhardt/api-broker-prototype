@@ -24,6 +24,24 @@ func main() {
 		Usage: "prototype for an event-sourcing inspired API binding",
 		Commands: []*cli.Command{
 			{
+				Name:      "configure",
+				Usage:     "Insert a configuration event into the store.",
+				ArgsUsage: " ",
+				Flags: []cli.Flag{
+					&cli.UintFlag{
+						Name:  "retries",
+						Value: 0,
+						Usage: "number of times to retry a failed request",
+					},
+				},
+				Action: func(c *cli.Context) error {
+					if c.NArg() > 0 {
+						return errors.New("no arguments expected")
+					}
+					return configureMain(c.Uint("retries"))
+				},
+			},
+			{
 				Name:      "insert",
 				Usage:     "Insert an event into the store.",
 				ArgsUsage: "<event>",
@@ -147,6 +165,28 @@ func initEventStore() error {
 
 	logger.Info("initialized event store")
 
+	return nil
+}
+
+// insert a configuration event
+func configureMain(retries uint) error {
+	if err := initEventStore(); err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	event := configurationEvent{
+		retries: int32(retries),
+	}
+
+	envelope := store.Insert(ctx, event, 0)
+	if store.Error() != nil {
+		return store.Error()
+	}
+
+	logger.Debug("inserted configuration event", "id", envelope.ID())
 	return nil
 }
 
