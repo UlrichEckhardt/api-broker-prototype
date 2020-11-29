@@ -218,6 +218,7 @@ func listMain(lastProcessed string) error {
 			"class", envelope.Event().Class(),
 			"created", envelope.Created().Format(time.RFC3339),
 			"causation_id", envelope.CausationID(),
+			"data", envelope.Event(),
 		)
 	}
 
@@ -276,6 +277,7 @@ func processMain(lastProcessed string) error {
 			"class", envelope.Event().Class(),
 			"created", envelope.Created().Format(time.RFC3339),
 			"causation_id", envelope.CausationID(),
+			"data", envelope.Event(),
 		)
 
 		switch event := envelope.Event().(type) {
