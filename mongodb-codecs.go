@@ -28,6 +28,28 @@ func (codec *simpleEventCodec) Deserialize(data bson.M) (Event, error) {
 	return res, nil
 }
 
+// MongoDB codec for configurationEvents.
+type configurationEventCodec struct{}
+
+// Class implements the MongoDBEventCodec interface.
+func (codec *configurationEventCodec) Class() string {
+	return "configuration"
+}
+
+// Serialize implements the MongoDBEventCodec interface.
+func (codec *configurationEventCodec) Serialize(e Event) (bson.M, error) {
+	ev := e.(configurationEvent)
+	return bson.M{"retries": ev.retries}, nil
+}
+
+// Deserialize implements the MongoDBEventCodec interface.
+func (codec *configurationEventCodec) Deserialize(data bson.M) (Event, error) {
+	res := configurationEvent{
+		retries: data["retries"].(int32),
+	}
+	return res, nil
+}
+
 // MongoDB codec for requestEvents.
 type requestEventCodec struct{}
 
@@ -39,7 +61,10 @@ func (codec *requestEventCodec) Class() string {
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *requestEventCodec) Serialize(e Event) (bson.M, error) {
 	ev := e.(requestEvent)
-	return bson.M{"request": ev.request}, nil
+	res := bson.M{
+		"request": ev.request,
+	}
+	return res, nil
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
@@ -61,7 +86,10 @@ func (codec *responseEventCodec) Class() string {
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *responseEventCodec) Serialize(e Event) (bson.M, error) {
 	ev := e.(responseEvent)
-	return bson.M{"response": ev.response}, nil
+	res := bson.M{
+		"response": ev.response,
+	}
+	return res, nil
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
@@ -83,7 +111,10 @@ func (codec *failureEventCodec) Class() string {
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *failureEventCodec) Serialize(e Event) (bson.M, error) {
 	ev := e.(failureEvent)
-	return bson.M{"failure": ev.failure}, nil
+	res := bson.M{
+		"failure": ev.failure,
+	}
+	return res, nil
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
