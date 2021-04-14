@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/inconshreveable/log15"
+	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"strconv"
 )
@@ -20,6 +21,19 @@ const (
 	POSTGRES_PORT     = "5432"
 	POSTGRES_DATABASE = "postgres"
 )
+
+// The PostgreSQLEventCodec interface defines methods common to event codecs.
+// The codecs convert between the internal representation (Event) and the
+// general-purpose representation for PostgreSQL (JSONB).
+// See also the Event interface, which it is closely related to.
+type PostgreSQLEventCodec interface {
+	// Class returns a string that identifies the event type this codec handles.
+	Class() string
+	// Serialize the event in a way that allows writing it to a PostgreSQL DB.
+	Serialize(event events.Event) (pgtype.JSONB, error)
+	// Deserialize an event from data from a PostgreSQL DB.
+	Deserialize(data pgtype.JSONB) (events.Event, error)
+}
 
 // PostgreSQLEventStore implements the EventStore interface using a PostgreSQL DB
 type PostgreSQLEventStore struct {
