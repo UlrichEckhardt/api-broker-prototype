@@ -17,8 +17,8 @@ const (
 )
 
 // Connect to the two collections in the DB
-func Connect() (*mongo.Collection, *mongo.Collection, error) {
-	opts := options.Client().ApplyURI("mongodb://localhost").SetAppName(AppName).SetConnectTimeout(1 * time.Second)
+func Connect(host string) (*mongo.Collection, *mongo.Collection, error) {
+	opts := options.Client().ApplyURI("mongodb://" + host).SetAppName(AppName).SetConnectTimeout(1 * time.Second)
 	err := opts.Validate()
 	if err != nil {
 		return nil, nil, err

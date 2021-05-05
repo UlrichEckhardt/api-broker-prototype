@@ -88,13 +88,13 @@ type MongoDBEventStore struct {
 }
 
 // NewEventStore creates and connects a MongoDBEventStore instance.
-func NewEventStore(logger log15.Logger) *MongoDBEventStore {
+func NewEventStore(logger log15.Logger, host string) *MongoDBEventStore {
 	logger.Debug("creating event store")
 	s := MongoDBEventStore{
 		logger: logger,
 		codecs: make(map[string]MongoDBEventCodec),
 	}
-	events, notifications, err := Connect()
+	events, notifications, err := Connect(host)
 	if err == nil {
 		// initialize collections
 		s.events = events

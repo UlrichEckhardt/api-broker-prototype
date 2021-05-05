@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	logger log15.Logger
-	store  EventStore
+	eventStoreDBHost string
+	logger           log15.Logger
+	store            EventStore
 )
 
 func main() {
@@ -22,6 +23,15 @@ func main() {
 	app := cli.App{
 		Name:  "api-broker-prototype",
 		Usage: "prototype for an event-sourcing inspired API binding",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "eventstore-db-host",
+				EnvVars: []string{"EVENTSTORE_DB_HOST"},
+				Value:   "localhost",
+				Usage:   "Hostname of the DB server for the event store.",
+				Destination: &eventStoreDBHost,
+			},
+		},
 		Commands: []*cli.Command{
 			{
 				Name:      "configure",
@@ -152,7 +162,7 @@ func initEventStore() error {
 	esLogger := log15.New("context", "event store")
 	esLogger.SetHandler(handler)
 
-	s := NewEventStore(esLogger)
+	s := NewEventStore(esLogger, eventStoreDBHost)
 	s.RegisterCodec(&configurationEventCodec{})
 	s.RegisterCodec(&simpleEventCodec{})
 	s.RegisterCodec(&requestEventCodec{})
@@ -163,7 +173,7 @@ func initEventStore() error {
 	}
 	store = s
 
-	logger.Info("initialized event store")
+	logger.Info("initialized event store", "host", eventStoreDBHost)
 
 	return nil
 }
