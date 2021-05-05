@@ -1,0 +1,19 @@
+# Git
+.git/
+
+# Github
+.github/
+
+# Docker files
+Dockerfile
+.dockerignore
+
+#
+# Everything below is just a copy of .gitignore
+#
+
+# IDE artifacts
+.vscode/
+
+# built executable
+api-broker-prototype
