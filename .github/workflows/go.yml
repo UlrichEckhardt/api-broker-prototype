@@ -3,7 +3,7 @@ on: [push]
 jobs:
 
   build-1_13:
-    name: Build
+    name: Build with Go 1.13
     runs-on: ubuntu-latest
     steps:
 
@@ -32,7 +32,7 @@ jobs:
 
 
   build-1_14:
-    name: Build
+    name: Build with Go 1.14
     runs-on: ubuntu-latest
     steps:
 
@@ -61,7 +61,7 @@ jobs:
 
 
   build-1_15:
-    name: Build
+    name: Build with Go 1.15
     runs-on: ubuntu-latest
     steps:
 
@@ -90,7 +90,7 @@ jobs:
 
 
   build-1_16:
-    name: Build
+    name: Build with Go 1.16
     runs-on: ubuntu-latest
     steps:
 
