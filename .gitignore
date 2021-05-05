@@ -1,8 +1,5 @@
 # IDE artifacts
 .vscode/
 
-# Go module artifact
-go.sum
-
 # built executable
 api-broker-prototype
