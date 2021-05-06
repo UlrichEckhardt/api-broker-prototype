@@ -1,4 +1,4 @@
-package main
+package mongodb
 
 // Implementation of the EventStore interface on top of a MongoDB.
 // The implementation uses two collections. The "events" collection just serves
@@ -9,6 +9,7 @@ package main
 // cursor, which is fundamental for the required blocking behaviour.
 
 import (
+	"api-broker-prototype/events"
 	"context"
 	"errors"
 	"github.com/inconshreveable/log15"
@@ -16,19 +17,30 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"strconv"
 	"time"
 )
 
+// Common DB settings.
+const (
+	AppName                    = "api-broker-prototype" // Name registered at MongoDB for better log readability.
+	DBName                     = "test"                 // Name of the DB.
+	EventCollectionName        = "events"               // Name of the collection with actual events and payload.
+	NotificationCollectionName = "notifications"        // Name of the capped collection with notifications.
+)
+
 // The MongoDBEventCodec interface defines methods common to event codecs.
+// The codecs convert between the internal representation (Event) and the
+// general-purpose representation for MongoDB (bson.M).
 // See also the Event interface, which it is closely related to.
 type MongoDBEventCodec interface {
 	// Class returns a string that identifies the event type this codec handles.
 	Class() string
 	// Serialize the event in a way that allows writing it to a MongoDB.
-	Serialize(event Event) (bson.M, error)
+	Serialize(event events.Event) (bson.M, error)
 	// Deserialize an event from data from a MongoDB.
-	Deserialize(data bson.M) (Event, error)
+	Deserialize(data bson.M) (events.Event, error)
 }
 
 // mongoDBRawEnvelope is the type representing the envelope in MongoDB
@@ -45,7 +57,7 @@ type mongoDBEnvelope struct {
 	IDVal          int32
 	CreatedVal     primitive.DateTime
 	CausationIDVal int32
-	EventVal       Event
+	EventVal       events.Event
 }
 
 // ID implements the Envelope interface.
@@ -64,7 +76,7 @@ func (env *mongoDBEnvelope) CausationID() int32 {
 }
 
 // Event implements the Envelope interface.
-func (env *mongoDBEnvelope) Event() Event {
+func (env *mongoDBEnvelope) Event() events.Event {
 	return env.EventVal
 }
 
@@ -87,6 +99,40 @@ type MongoDBEventStore struct {
 	codecs        map[string]MongoDBEventCodec
 }
 
+// Connect to the two collections in the DB
+func connect(host string) (*mongo.Collection, *mongo.Collection, error) {
+	opts := options.
+		Client().
+		ApplyURI("mongodb://" + host).
+		SetAppName(AppName).SetConnectTimeout(1 * time.Second)
+	err := opts.Validate()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	client, err := mongo.NewClient(opts)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := client.Connect(ctx); err != nil {
+		return nil, nil, err
+	}
+
+	if err := client.Ping(ctx, readpref.Primary()); err != nil {
+		return nil, nil, err
+	}
+
+	db := client.Database(DBName)
+	events := db.Collection(EventCollectionName)
+	notifications := db.Collection(NotificationCollectionName)
+
+	return events, notifications, nil
+}
+
 // NewEventStore creates and connects a MongoDBEventStore instance.
 func NewEventStore(logger log15.Logger, host string) *MongoDBEventStore {
 	logger.Debug("creating event store")
@@ -94,7 +140,7 @@ func NewEventStore(logger log15.Logger, host string) *MongoDBEventStore {
 		logger: logger,
 		codecs: make(map[string]MongoDBEventCodec),
 	}
-	events, notifications, err := Connect(host)
+	events, notifications, err := connect(host)
 	if err == nil {
 		// initialize collections
 		s.events = events
@@ -103,6 +149,11 @@ func NewEventStore(logger log15.Logger, host string) *MongoDBEventStore {
 		// set error state
 		s.err = err
 	}
+	s.RegisterCodec(&ConfigurationEventCodec{})
+	s.RegisterCodec(&SimpleEventCodec{})
+	s.RegisterCodec(&RequestEventCodec{})
+	s.RegisterCodec(&ResponseEventCodec{})
+	s.RegisterCodec(&FailureEventCodec{})
 	return &s
 }
 
@@ -129,7 +180,7 @@ func (s *MongoDBEventStore) Error() error {
 }
 
 // Insert implements the EventStore interface.
-func (s *MongoDBEventStore) Insert(ctx context.Context, event Event, causationID int32) Envelope {
+func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, causationID int32) events.Envelope {
 	s.logger.Debug("inserting event")
 
 	// don't do anything if the error state of the store is set already
@@ -240,7 +291,7 @@ func (s *MongoDBEventStore) findNextID(ctx context.Context) int32 {
 }
 
 // RetrieveOne implements the EventStore interface.
-func (s *MongoDBEventStore) RetrieveOne(ctx context.Context, id int32) Envelope {
+func (s *MongoDBEventStore) RetrieveOne(ctx context.Context, id int32) events.Envelope {
 	s.logger.Debug("loading event", "id", id)
 
 	// don't do anything if the error state of the store is set already
@@ -326,10 +377,10 @@ func (s *MongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnve
 }
 
 // LoadEvents implements the EventStore interface.
-func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan Envelope {
+func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan events.Envelope {
 	s.logger.Debug("loading events", "following", start)
 
-	out := make(chan Envelope)
+	out := make(chan events.Envelope)
 
 	// run code to retrieve events in a goroutine
 	go func() {
@@ -375,10 +426,10 @@ func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan 
 }
 
 // FollowNotifications implements the EventStore interface.
-func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) <-chan Notification {
+func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) <-chan events.Notification {
 	s.logger.Debug("following notifications")
 
-	out := make(chan Notification)
+	out := make(chan events.Notification)
 
 	// run code to pump notifications in a goroutine
 	go func() {
@@ -417,10 +468,10 @@ func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) <-chan Noti
 }
 
 // FollowEvents implements the EventStore interface.
-func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-chan Envelope {
+func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-chan events.Envelope {
 	s.logger.Debug("following events")
 
-	out := make(chan Envelope)
+	out := make(chan events.Envelope)
 
 	// run code to retrieve events in a goroutine
 	go func() {
