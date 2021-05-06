@@ -1,6 +1,7 @@
 package main
 
 import (
+	"api-broker-prototype/events"
 	"go.mongodb.org/mongo-driver/bson"
 	"reflect"
 	"testing"
@@ -100,14 +101,14 @@ func runTestcase(name string, c testcase, codec MongoDBEventCodec, t *testing.T)
 func TestSimpleCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test 1": {
-			event: simpleEvent{},
+			event: events.SimpleEvent{},
 			data: bson.M{
 				"message": "",
 			},
 		},
 		"test 2": {
-			event: simpleEvent{
-				message: "some message",
+			event: events.SimpleEvent{
+				Message: "some message",
 			},
 			data: bson.M{
 				"message": "some message",
@@ -124,8 +125,8 @@ func TestSimpleCodec(t *testing.T) {
 func TestConfigurationCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test configuration": {
-			event: configurationEvent{
-				retries: 2,
+			event: events.ConfigurationEvent{
+				Retries: 2,
 			},
 			data: bson.M{
 				"retries": int32(2),
@@ -142,8 +143,8 @@ func TestConfigurationCodec(t *testing.T) {
 func TestRequestCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test request": {
-			event: requestEvent{
-				request: "some request",
+			event: events.RequestEvent{
+				Request: "some request",
 			},
 			data: bson.M{
 				"request": "some request",
@@ -160,8 +161,8 @@ func TestRequestCodec(t *testing.T) {
 func TestResponseCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test response": {
-			event: responseEvent{
-				response: "some response",
+			event: events.ResponseEvent{
+				Response: "some response",
 			},
 			data: bson.M{
 				"response": "some response",
@@ -178,8 +179,8 @@ func TestResponseCodec(t *testing.T) {
 func TestFailureCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test failure": {
-			event: failureEvent{
-				failure: "some failure",
+			event: events.FailureEvent{
+				Failure: "some failure",
 			},
 			data: bson.M{
 				"failure": "some failure",
