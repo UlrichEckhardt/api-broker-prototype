@@ -149,6 +149,11 @@ func NewEventStore(logger log15.Logger, host string) *MongoDBEventStore {
 		// set error state
 		s.err = err
 	}
+	s.RegisterCodec(&ConfigurationEventCodec{})
+	s.RegisterCodec(&SimpleEventCodec{})
+	s.RegisterCodec(&RequestEventCodec{})
+	s.RegisterCodec(&ResponseEventCodec{})
+	s.RegisterCodec(&FailureEventCodec{})
 	return &s
 }
 
