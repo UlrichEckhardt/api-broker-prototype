@@ -1,0 +1,25 @@
+version: '3.6'
+
+services:
+  # Note: The broker doesn't start as a service here, it just runs the broker
+  # executable once. This is rather a placeholder than an actual service.
+  broker:
+    build: .
+    depends_on:
+      - mongodb
+    environment:
+      - EVENTSTORE_DB_HOST=mongodb
+
+  mongodb:
+    image: mongo:4.2
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "show logs"]
+      interval: 30s
+      timeout: 2s
+      retries: 1
+    ports:
+      - 27017:27017
+    volumes:
+      - type: bind
+        source: ./docker-compose.d/setup-mongodb-event-store.sh
+        target: /docker-entrypoint-initdb.d/setup-event-store.sh
