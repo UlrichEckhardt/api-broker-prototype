@@ -8,7 +8,7 @@ import (
 )
 
 type testcase struct {
-	event Event
+	event events.Event
 	data  bson.M
 	err   error
 }

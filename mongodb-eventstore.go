@@ -9,6 +9,7 @@ package main
 // cursor, which is fundamental for the required blocking behaviour.
 
 import (
+	"api-broker-prototype/events"
 	"context"
 	"errors"
 	"github.com/inconshreveable/log15"
@@ -35,9 +36,9 @@ type MongoDBEventCodec interface {
 	// Class returns a string that identifies the event type this codec handles.
 	Class() string
 	// Serialize the event in a way that allows writing it to a MongoDB.
-	Serialize(event Event) (bson.M, error)
+	Serialize(event events.Event) (bson.M, error)
 	// Deserialize an event from data from a MongoDB.
-	Deserialize(data bson.M) (Event, error)
+	Deserialize(data bson.M) (events.Event, error)
 }
 
 // mongoDBRawEnvelope is the type representing the envelope in MongoDB
@@ -54,7 +55,7 @@ type mongoDBEnvelope struct {
 	IDVal          int32
 	CreatedVal     primitive.DateTime
 	CausationIDVal int32
-	EventVal       Event
+	EventVal       events.Event
 }
 
 // ID implements the Envelope interface.
@@ -73,7 +74,7 @@ func (env *mongoDBEnvelope) CausationID() int32 {
 }
 
 // Event implements the Envelope interface.
-func (env *mongoDBEnvelope) Event() Event {
+func (env *mongoDBEnvelope) Event() events.Event {
 	return env.EventVal
 }
 
@@ -172,7 +173,7 @@ func (s *MongoDBEventStore) Error() error {
 }
 
 // Insert implements the EventStore interface.
-func (s *MongoDBEventStore) Insert(ctx context.Context, event Event, causationID int32) Envelope {
+func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, causationID int32) Envelope {
 	s.logger.Debug("inserting event")
 
 	// don't do anything if the error state of the store is set already

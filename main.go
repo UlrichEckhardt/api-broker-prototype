@@ -211,7 +211,7 @@ func insertMain(class string, data string, causation string) error {
 	defer cancel()
 
 	// create the event from the commandline arguments
-	var event Event
+	var event events.Event
 	switch class {
 	case "simple":
 		event = events.SimpleEvent{Message: data}

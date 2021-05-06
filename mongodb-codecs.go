@@ -16,13 +16,13 @@ func (codec *simpleEventCodec) Class() string {
 }
 
 // Serialize implements the MongoDBEventCodec interface.
-func (codec *simpleEventCodec) Serialize(e Event) (bson.M, error) {
+func (codec *simpleEventCodec) Serialize(e events.Event) (bson.M, error) {
 	ev := e.(events.SimpleEvent)
 	return bson.M{"message": ev.Message}, nil
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
-func (codec *simpleEventCodec) Deserialize(data bson.M) (Event, error) {
+func (codec *simpleEventCodec) Deserialize(data bson.M) (events.Event, error) {
 	res := events.SimpleEvent{
 		Message: data["message"].(string),
 	}
@@ -38,13 +38,13 @@ func (codec *configurationEventCodec) Class() string {
 }
 
 // Serialize implements the MongoDBEventCodec interface.
-func (codec *configurationEventCodec) Serialize(e Event) (bson.M, error) {
+func (codec *configurationEventCodec) Serialize(e events.Event) (bson.M, error) {
 	ev := e.(events.ConfigurationEvent)
 	return bson.M{"retries": ev.Retries}, nil
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
-func (codec *configurationEventCodec) Deserialize(data bson.M) (Event, error) {
+func (codec *configurationEventCodec) Deserialize(data bson.M) (events.Event, error) {
 	res := events.ConfigurationEvent{
 		Retries: data["retries"].(int32),
 	}
@@ -60,7 +60,7 @@ func (codec *requestEventCodec) Class() string {
 }
 
 // Serialize implements the MongoDBEventCodec interface.
-func (codec *requestEventCodec) Serialize(e Event) (bson.M, error) {
+func (codec *requestEventCodec) Serialize(e events.Event) (bson.M, error) {
 	ev := e.(events.RequestEvent)
 	res := bson.M{
 		"request": ev.Request,
@@ -69,7 +69,7 @@ func (codec *requestEventCodec) Serialize(e Event) (bson.M, error) {
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
-func (codec *requestEventCodec) Deserialize(data bson.M) (Event, error) {
+func (codec *requestEventCodec) Deserialize(data bson.M) (events.Event, error) {
 	res := events.RequestEvent{
 		Request: data["request"].(string),
 	}
@@ -85,7 +85,7 @@ func (codec *responseEventCodec) Class() string {
 }
 
 // Serialize implements the MongoDBEventCodec interface.
-func (codec *responseEventCodec) Serialize(e Event) (bson.M, error) {
+func (codec *responseEventCodec) Serialize(e events.Event) (bson.M, error) {
 	ev := e.(events.ResponseEvent)
 	res := bson.M{
 		"response": ev.Response,
@@ -94,7 +94,7 @@ func (codec *responseEventCodec) Serialize(e Event) (bson.M, error) {
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
-func (codec *responseEventCodec) Deserialize(data bson.M) (Event, error) {
+func (codec *responseEventCodec) Deserialize(data bson.M) (events.Event, error) {
 	res := events.ResponseEvent{
 		Response: data["response"].(string),
 	}
@@ -110,7 +110,7 @@ func (codec *failureEventCodec) Class() string {
 }
 
 // Serialize implements the MongoDBEventCodec interface.
-func (codec *failureEventCodec) Serialize(e Event) (bson.M, error) {
+func (codec *failureEventCodec) Serialize(e events.Event) (bson.M, error) {
 	ev := e.(events.FailureEvent)
 	res := bson.M{
 		"failure": ev.Failure,
@@ -119,7 +119,7 @@ func (codec *failureEventCodec) Serialize(e Event) (bson.M, error) {
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
-func (codec *failureEventCodec) Deserialize(data bson.M) (Event, error) {
+func (codec *failureEventCodec) Deserialize(data bson.M) (events.Event, error) {
 	res := events.FailureEvent{
 		Failure: data["failure"].(string),
 	}

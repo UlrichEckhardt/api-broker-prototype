@@ -10,17 +10,10 @@ package main
 //    to take the form of an integer sequence.
 
 import (
+	"api-broker-prototype/events"
 	"context"
 	"time"
 )
-
-// The Event interface defines methods common to events.
-type Event interface {
-	// Class returns a string that identifies the event type.
-	// This is distinct from Go's type name because it should be
-	// agnostic of the language.
-	Class() string
-}
 
 // The Envelope is a container for the actual event, which it carries as
 // payload. In addition, it contains the time when the envelope was persisted
@@ -34,7 +27,7 @@ type Envelope interface {
 	// This can be zero if this event was not caused by another event.
 	CausationID() int32
 	// Event returns the event contained in the envelope.
-	Event() Event
+	Event() events.Event
 }
 
 // Notification just carries the ID of a persisted event.
@@ -55,7 +48,7 @@ type EventStore interface {
 	// The event is wrapped in an envelope and returned.
 	// The causation ID is that of the preceding event that caused this new
 	// event. It can be zero when its cause is not a preceding event.
-	Insert(ctx context.Context, event Event, causationID int32) Envelope
+	Insert(ctx context.Context, event events.Event, causationID int32) Envelope
 	// Retrieve just the event with the given ID.
 	RetrieveOne(ctx context.Context, id int32) Envelope
 	// Retrieve all currently existing events, which are provided via the returned channel.
