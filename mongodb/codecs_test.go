@@ -1,4 +1,4 @@
-package main
+package mongodb
 
 import (
 	"api-broker-prototype/events"
@@ -116,7 +116,7 @@ func TestSimpleCodec(t *testing.T) {
 		},
 	}
 
-	var codec simpleEventCodec
+	var codec SimpleEventCodec
 	for name, c := range cases {
 		runTestcase(name, c, &codec, t)
 	}
@@ -134,7 +134,7 @@ func TestConfigurationCodec(t *testing.T) {
 		},
 	}
 
-	var codec configurationEventCodec
+	var codec ConfigurationEventCodec
 	for name, c := range cases {
 		runTestcase(name, c, &codec, t)
 	}
@@ -152,7 +152,7 @@ func TestRequestCodec(t *testing.T) {
 		},
 	}
 
-	var codec requestEventCodec
+	var codec RequestEventCodec
 	for name, c := range cases {
 		runTestcase(name, c, &codec, t)
 	}
@@ -170,7 +170,7 @@ func TestResponseCodec(t *testing.T) {
 		},
 	}
 
-	var codec responseEventCodec
+	var codec ResponseEventCodec
 	for name, c := range cases {
 		runTestcase(name, c, &codec, t)
 	}
@@ -188,7 +188,7 @@ func TestFailureCodec(t *testing.T) {
 		},
 	}
 
-	var codec failureEventCodec
+	var codec FailureEventCodec
 	for name, c := range cases {
 		runTestcase(name, c, &codec, t)
 	}

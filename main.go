@@ -2,6 +2,7 @@ package main
 
 import (
 	"api-broker-prototype/events"
+	"api-broker-prototype/mongodb"
 	"context"
 	"errors"
 	"github.com/inconshreveable/log15"
@@ -163,12 +164,12 @@ func initEventStore() error {
 	esLogger := log15.New("context", "event store")
 	esLogger.SetHandler(handler)
 
-	s := NewEventStore(esLogger, eventStoreDBHost)
-	s.RegisterCodec(&configurationEventCodec{})
-	s.RegisterCodec(&simpleEventCodec{})
-	s.RegisterCodec(&requestEventCodec{})
-	s.RegisterCodec(&responseEventCodec{})
-	s.RegisterCodec(&failureEventCodec{})
+	s := mongodb.NewEventStore(esLogger, eventStoreDBHost)
+	s.RegisterCodec(&mongodb.ConfigurationEventCodec{})
+	s.RegisterCodec(&mongodb.SimpleEventCodec{})
+	s.RegisterCodec(&mongodb.RequestEventCodec{})
+	s.RegisterCodec(&mongodb.ResponseEventCodec{})
+	s.RegisterCodec(&mongodb.FailureEventCodec{})
 	if e := s.Error(); e != nil {
 		return e
 	}

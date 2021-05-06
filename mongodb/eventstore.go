@@ -1,4 +1,4 @@
-package main
+package mongodb
 
 // Implementation of the EventStore interface on top of a MongoDB.
 // The implementation uses two collections. The "events" collection just serves
@@ -31,6 +31,8 @@ const (
 )
 
 // The MongoDBEventCodec interface defines methods common to event codecs.
+// The codecs convert between the internal representation (Event) and the
+// general-purpose representation for MongoDB (bson.M).
 // See also the Event interface, which it is closely related to.
 type MongoDBEventCodec interface {
 	// Class returns a string that identifies the event type this codec handles.
