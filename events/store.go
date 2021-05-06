@@ -1,4 +1,4 @@
-package main
+package events
 
 // This package contains interface definitions for an event store.
 // Generally, this is defined to be agnostic of the storage infrastructure
@@ -10,7 +10,6 @@ package main
 //    to take the form of an integer sequence.
 
 import (
-	"api-broker-prototype/events"
 	"context"
 	"time"
 )
@@ -27,7 +26,7 @@ type Envelope interface {
 	// This can be zero if this event was not caused by another event.
 	CausationID() int32
 	// Event returns the event contained in the envelope.
-	Event() events.Event
+	Event() Event
 }
 
 // Notification just carries the ID of a persisted event.
@@ -48,7 +47,7 @@ type EventStore interface {
 	// The event is wrapped in an envelope and returned.
 	// The causation ID is that of the preceding event that caused this new
 	// event. It can be zero when its cause is not a preceding event.
-	Insert(ctx context.Context, event events.Event, causationID int32) Envelope
+	Insert(ctx context.Context, event Event, causationID int32) Envelope
 	// Retrieve just the event with the given ID.
 	RetrieveOne(ctx context.Context, id int32) Envelope
 	// Retrieve all currently existing events, which are provided via the returned channel.

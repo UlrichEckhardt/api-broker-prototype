@@ -13,7 +13,7 @@ import (
 var (
 	eventStoreDBHost string
 	logger           log15.Logger
-	store            EventStore
+	store            events.EventStore
 )
 
 func main() {
@@ -278,7 +278,7 @@ func listMain(lastProcessed string) error {
 }
 
 // utility function to invoke the API and store the result as event
-func callAPI(ctx context.Context, store EventStore, event events.RequestEvent, causationID int32) {
+func callAPI(ctx context.Context, store events.EventStore, event events.RequestEvent, causationID int32) {
 	// delegate to API stub
 	response, err := ProcessRequest(event.Request)
 
@@ -316,7 +316,7 @@ func processMain(lastProcessed string) error {
 
 	// map of requests being processed currently
 	type requestState struct {
-		request Envelope
+		request events.Envelope
 		retries uint // number of retries left
 	}
 	calls := make(map[int32]*requestState)
