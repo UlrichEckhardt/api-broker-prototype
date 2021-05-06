@@ -27,10 +27,10 @@ func main() {
 		Usage: "prototype for an event-sourcing inspired API binding",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:    "eventstore-db-host",
-				EnvVars: []string{"EVENTSTORE_DB_HOST"},
-				Value:   "localhost",
-				Usage:   "Hostname of the DB server for the event store.",
+				Name:        "eventstore-db-host",
+				EnvVars:     []string{"EVENTSTORE_DB_HOST"},
+				Value:       "localhost",
+				Usage:       "Hostname of the DB server for the event store.",
 				Destination: &eventStoreDBHost,
 			},
 		},
