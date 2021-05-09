@@ -64,6 +64,16 @@ func (env *postgreSQLEnvelope) Event() events.Event {
 	return env.EventVal
 }
 
+// postgreSQLNotification implements the Notification interface.
+type postgreSQLNotification struct {
+	IDVal int32
+}
+
+// ID implements the Notification interface.
+func (note *postgreSQLNotification) ID() int32 {
+	return note.IDVal
+}
+
 // PostgreSQLEventStore implements the EventStore interface using a PostgreSQL DB
 type PostgreSQLEventStore struct {
 	logger log15.Logger
