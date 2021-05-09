@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"strconv"
+	"time"
 )
 
 const (
@@ -33,6 +34,34 @@ type PostgreSQLEventCodec interface {
 	Serialize(event events.Event) (pgtype.JSONB, error)
 	// Deserialize an event from data from a PostgreSQL DB.
 	Deserialize(data pgtype.JSONB) (events.Event, error)
+}
+
+// postgreSQLEnvelope implements the Envelope interface.
+type postgreSQLEnvelope struct {
+	IDVal          int32
+	CreatedVal     time.Time
+	CausationIDVal int32
+	EventVal       events.Event
+}
+
+// ID implements the EventStore interface.
+func (env *postgreSQLEnvelope) ID() int32 {
+	return env.IDVal
+}
+
+// Created implements the EventStore interface.
+func (env *postgreSQLEnvelope) Created() time.Time {
+	return env.CreatedVal
+}
+
+// CausationID implements the EventStore interface.
+func (env *postgreSQLEnvelope) CausationID() int32 {
+	return env.CausationIDVal
+}
+
+// Event implements the EventStore interface.
+func (env *postgreSQLEnvelope) Event() events.Event {
+	return env.EventVal
 }
 
 // PostgreSQLEventStore implements the EventStore interface using a PostgreSQL DB
