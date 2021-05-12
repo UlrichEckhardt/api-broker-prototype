@@ -161,6 +161,7 @@ func NewEventStore(logger log15.Logger, host string) *MongoDBEventStore {
 func (s *MongoDBEventStore) RegisterCodec(codec MongoDBEventCodec) {
 	if codec == nil {
 		s.err = errors.New("nil codec registered")
+		return
 	}
 	s.codecs[codec.Class()] = codec
 }
