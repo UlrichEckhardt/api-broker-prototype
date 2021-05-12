@@ -2,7 +2,7 @@ ARG GO_VERSION=1.16
 FROM golang:${GO_VERSION} AS build
 
 RUN mkdir /go/api-broker-prototype
-WORKDIR /go//api-broker-prototype
+WORKDIR /go/api-broker-prototype
 
 # copy module files separately and download modules
 # These only change rarely, so having them in an earlier layer increases the
