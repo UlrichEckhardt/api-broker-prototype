@@ -43,6 +43,11 @@ type EventStore interface {
 	// Retrieve error state of the event store.
 	// All functions below set this error state in order to signal failure.
 	Error() error
+
+	// Close the connection to the underlying storage.
+	// This implements the io.Closer interface.
+	Close() error
+
 	// Insert an event as payload into the store.
 	// The event is wrapped in an envelope and returned.
 	// The causation ID is that of the preceding event that caused this new

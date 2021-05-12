@@ -176,11 +176,18 @@ func initEventStore() error {
 	return nil
 }
 
+func finalizeEventStore() {
+	if err := store.Close(); err != nil {
+		logger.Error("failed to close event store", "error", err)
+	}
+}
+
 // insert a configuration event
 func configureMain(retries uint) error {
 	if err := initEventStore(); err != nil {
 		return err
 	}
+	defer finalizeEventStore()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -203,6 +210,7 @@ func insertMain(class string, data string, causation string) error {
 	if err := initEventStore(); err != nil {
 		return err
 	}
+	defer finalizeEventStore()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -243,6 +251,7 @@ func listMain(lastProcessed string) error {
 	if err := initEventStore(); err != nil {
 		return err
 	}
+	defer finalizeEventStore()
 
 	// parse optional event ID
 	var lastProcessedID int32
@@ -292,6 +301,7 @@ func processMain(lastProcessed string) error {
 	if err := initEventStore(); err != nil {
 		return err
 	}
+	defer finalizeEventStore()
 
 	// parse optional event ID
 	var lastProcessedID int32
@@ -401,6 +411,7 @@ func watchMain() error {
 	if err := initEventStore(); err != nil {
 		return err
 	}
+	defer finalizeEventStore()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

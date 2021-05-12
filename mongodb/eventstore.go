@@ -161,6 +161,7 @@ func NewEventStore(logger log15.Logger, host string) *MongoDBEventStore {
 func (s *MongoDBEventStore) RegisterCodec(codec MongoDBEventCodec) {
 	if codec == nil {
 		s.err = errors.New("nil codec registered")
+		return
 	}
 	s.codecs[codec.Class()] = codec
 }
@@ -177,6 +178,25 @@ func (s *MongoDBEventStore) ParseEventID(str string) (int32, error) {
 // Error implements the EventStore interface.
 func (s *MongoDBEventStore) Error() error {
 	return s.err
+}
+
+// Error implements the EventStore and io.Closer interfaces.
+func (s *MongoDBEventStore) Close() error {
+	s.logger.Debug("closing eventstore")
+
+	// don't do anything if the error state of the store is set already
+	if s.err != nil {
+		return nil
+	}
+
+	// reset fields so the GC can reclaim them
+	s.events = nil
+	s.notifications = nil
+
+	// set this error to block any further calls
+	s.err = errors.New("eventstore is closed")
+
+	return nil
 }
 
 // Insert implements the EventStore interface.
