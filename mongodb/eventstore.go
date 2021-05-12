@@ -181,6 +181,8 @@ func (s *MongoDBEventStore) Error() error {
 
 // Error implements the EventStore and io.Closer interfaces.
 func (s *MongoDBEventStore) Close() error {
+	s.logger.Debug("closing eventstore")
+
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil
