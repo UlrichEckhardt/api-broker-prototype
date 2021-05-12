@@ -18,5 +18,8 @@ docker-compose.d/
 # IDE artifacts
 .vscode/
 
+# vendored Go packages
+vendor/
+
 # built executable
 api-broker-prototype
