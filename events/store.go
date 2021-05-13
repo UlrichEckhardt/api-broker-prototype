@@ -56,7 +56,7 @@ type EventStore interface {
 	// Retrieve just the event with the given ID.
 	RetrieveOne(ctx context.Context, id int32) (Envelope, error)
 	// Retrieve all currently existing events, which are provided via the returned channel.
-	LoadEvents(ctx context.Context, start int32) <-chan Envelope
+	LoadEvents(ctx context.Context, start int32) (<-chan Envelope, error)
 	// Follow the stream of notifications. This function emits any newly
 	// created notification via the returned channel.
 	FollowNotifications(ctx context.Context) <-chan Notification

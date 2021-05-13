@@ -266,7 +266,10 @@ func listMain(lastProcessed string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := store.LoadEvents(ctx, lastProcessedID)
+	ch, err := store.LoadEvents(ctx, lastProcessedID)
+	if err != nil {
+		return err
+	}
 
 	// process events from the channel
 	for envelope := range ch {

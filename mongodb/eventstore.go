@@ -404,8 +404,13 @@ func (s *MongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnve
 }
 
 // LoadEvents implements the EventStore interface.
-func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan events.Envelope {
+func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
 	s.logger.Debug("loading events", "following", start)
+
+	// don't do anything if the error state of the store is set already
+	if s.err != nil {
+		return nil, s.err
+	}
 
 	out := make(chan events.Envelope)
 
@@ -450,7 +455,7 @@ func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan 
 		}
 	}()
 
-	return out
+	return out, nil
 }
 
 // FollowNotifications implements the EventStore interface.
