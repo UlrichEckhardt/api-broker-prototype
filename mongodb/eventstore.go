@@ -341,6 +341,8 @@ func (s *MongoDBEventStore) RetrieveOne(ctx context.Context, id int32) events.En
 }
 
 // retrieveNext retrieves the event following the one with the given ID.
+// This will return the decoded envelope or nil if there is no next event. In
+// case of failure, it sets the error state.
 func (s *MongoDBEventStore) retrieveNext(ctx context.Context, id int32) *mongoDBEnvelope {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
@@ -369,6 +371,9 @@ func (s *MongoDBEventStore) retrieveNext(ctx context.Context, id int32) *mongoDB
 }
 
 // decode the envelope from a MongoDB lookup
+// This will return the decoded envelope. In case of failure, it sets the error
+// state. Errors here are non-recoverable, because they are caused by a mismatch
+// between the actual and expected DB structure.
 func (s *MongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnvelope {
 	var envelope mongoDBRawEnvelope
 	if err := raw.Decode(&envelope); err != nil {
