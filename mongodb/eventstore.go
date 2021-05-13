@@ -506,8 +506,13 @@ func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) (<-chan eve
 }
 
 // FollowEvents implements the EventStore interface.
-func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-chan events.Envelope {
+func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
 	s.logger.Debug("following events")
+
+	// don't do anything if the error state of the store is set already
+	if s.err != nil {
+		return nil, s.err
+	}
 
 	out := make(chan events.Envelope)
 
@@ -571,5 +576,5 @@ func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-cha
 		}
 	}()
 
-	return out
+	return out, nil
 }

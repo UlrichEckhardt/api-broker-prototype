@@ -319,7 +319,10 @@ func processMain(lastProcessed string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := store.FollowEvents(ctx, lastProcessedID)
+	ch, err := store.FollowEvents(ctx, lastProcessedID)
+	if err != nil {
+		return err
+	}
 
 	// number of retries after a failed request
 	retries := uint(0)

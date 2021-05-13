@@ -62,5 +62,5 @@ type EventStore interface {
 	FollowNotifications(ctx context.Context) (<-chan Notification, error)
 	// Follow the stream of events. This function emits any newly created
 	// persisted event via the returned channel.
-	FollowEvents(ctx context.Context, start int32) <-chan Envelope
+	FollowEvents(ctx context.Context, start int32) (<-chan Envelope, error)
 }
