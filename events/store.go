@@ -54,7 +54,7 @@ type EventStore interface {
 	// event. It can be zero when its cause is not a preceding event.
 	Insert(ctx context.Context, event Event, causationID int32) (Envelope, error)
 	// Retrieve just the event with the given ID.
-	RetrieveOne(ctx context.Context, id int32) Envelope
+	RetrieveOne(ctx context.Context, id int32) (Envelope, error)
 	// Retrieve all currently existing events, which are provided via the returned channel.
 	LoadEvents(ctx context.Context, start int32) <-chan Envelope
 	// Follow the stream of notifications. This function emits any newly

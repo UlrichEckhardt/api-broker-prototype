@@ -315,33 +315,31 @@ func (s *MongoDBEventStore) findNextID(ctx context.Context) int32 {
 }
 
 // RetrieveOne implements the EventStore interface.
-func (s *MongoDBEventStore) RetrieveOne(ctx context.Context, id int32) events.Envelope {
+func (s *MongoDBEventStore) RetrieveOne(ctx context.Context, id int32) (events.Envelope, error) {
 	s.logger.Debug("loading event", "id", id)
 
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
-		return nil
+		return nil, s.err
 	}
 
 	// The ID must be valid.
 	if id == 0 {
-		s.err = errors.New("provided document ID is null")
-		return nil
+		return nil, errors.New("provided document ID is null")
 	}
 
 	// retrieve the document from the DB
 	filter := bson.M{"_id": bson.M{"$eq": id}}
 	res := s.events.FindOne(ctx, filter)
 	if res.Err() == mongo.ErrNoDocuments {
-		s.err = errors.New("document not found")
-		return nil
+		return nil, errors.New("document not found")
 	}
 	if res.Err() != nil {
 		s.err = res.Err()
-		return nil
+		return nil, s.err
 	}
 
-	return s.decodeEnvelope(res)
+	return s.decodeEnvelope(res), s.err
 }
 
 // retrieveNext retrieves the event following the one with the given ID.
@@ -423,7 +421,8 @@ func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan 
 
 		// load the referenced start object to verify the ID is valid
 		if start != 0 {
-			ref := s.RetrieveOne(ctx, start)
+			// TODO: actually handle the error here
+			ref, _ := s.RetrieveOne(ctx, start)
 			if ref == nil {
 				return
 			}
@@ -514,7 +513,8 @@ func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-cha
 
 		// load the referenced start object to verify the ID is valid
 		if start != 0 {
-			ref := s.RetrieveOne(ctx, start)
+			// TODO: actually handle the error here
+			ref, _ := s.RetrieveOne(ctx, start)
 			if ref == nil {
 				return
 			}
