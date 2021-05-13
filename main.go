@@ -165,9 +165,9 @@ func initEventStore() error {
 	esLogger.SetHandler(handler)
 
 	// create an event store facade
-	s := mongodb.NewEventStore(esLogger, eventStoreDBHost)
-	if e := s.Error(); e != nil {
-		return e
+	s, err := mongodb.NewEventStore(esLogger, eventStoreDBHost)
+	if err != nil {
+		return err
 	}
 	store = s
 

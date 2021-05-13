@@ -134,27 +134,29 @@ func connect(host string) (*mongo.Collection, *mongo.Collection, error) {
 }
 
 // NewEventStore creates and connects a MongoDBEventStore instance.
-func NewEventStore(logger log15.Logger, host string) *MongoDBEventStore {
+func NewEventStore(logger log15.Logger, host string) (*MongoDBEventStore, error) {
 	logger.Debug("creating event store")
 	s := MongoDBEventStore{
 		logger: logger,
 		codecs: make(map[string]MongoDBEventCodec),
 	}
+
+	// initialize collections
 	events, notifications, err := connect(host)
-	if err == nil {
-		// initialize collections
-		s.events = events
-		s.notifications = notifications
-	} else {
-		// set error state
-		s.err = err
+	if err != nil {
+		return nil, err
 	}
+	s.events = events
+	s.notifications = notifications
+
+	// register codecs
 	s.RegisterCodec(&ConfigurationEventCodec{})
 	s.RegisterCodec(&SimpleEventCodec{})
 	s.RegisterCodec(&RequestEventCodec{})
 	s.RegisterCodec(&ResponseEventCodec{})
 	s.RegisterCodec(&FailureEventCodec{})
-	return &s
+
+	return &s, nil
 }
 
 // RegisterCodec registers a codec that allows conversion of Events.
