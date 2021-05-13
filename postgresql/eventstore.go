@@ -168,6 +168,19 @@ func (s *PostgreSQLEventStore) Close() error {
 func (s *PostgreSQLEventStore) Insert(ctx context.Context, event events.Event, causationID int32) (events.Envelope, error) {
 	s.logger.Debug("inserting event", "causation", causationID, "class", event.Class())
 
+	// locate codec for the event class
+	class := event.Class()
+	codec := s.codecs[class]
+	if codec == nil {
+		return nil, errors.New("failed to locate codec for event")
+	}
+
+	// encode event for storage
+	payload, err := codec.Serialize(event)
+	if err != nil {
+		return nil, err
+	}
+
 	// establish connection
 	conn := s.connect(ctx)
 	if conn == nil {
@@ -175,7 +188,34 @@ func (s *PostgreSQLEventStore) Insert(ctx context.Context, event events.Event, c
 	}
 	defer conn.Close(ctx)
 
-	return nil, errors.New("not implemented")
+	// insert the event into the DB
+	now := time.Now()
+	row := conn.QueryRow(
+		ctx,
+		`INSERT INTO events (created, causation_id, class, payload) VALUES ($1, $2, $3, $4) RETURNING id;`,
+		now,
+		causationID,
+		class,
+		payload,
+	)
+
+	// retrieve assigned ID from response
+	var id int32
+	if err = row.Scan(&id); err != nil {
+		s.logger.Error("Unable to insert into the 'messages' table.", "error", err)
+		return nil, err
+	}
+
+	s.logger.Debug("Inserted data into 'messages' table.", "id", id)
+
+	res := &postgreSQLEnvelope{
+		IDVal:          id,
+		CreatedVal:     now,
+		CausationIDVal: causationID,
+		EventVal:       event,
+	}
+
+	return res, nil
 }
 
 // RetrieveOne implements the EventStore interface.
