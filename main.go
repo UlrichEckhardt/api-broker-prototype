@@ -196,9 +196,9 @@ func configureMain(retries uint) error {
 		Retries: int32(retries),
 	}
 
-	envelope := store.Insert(ctx, event, 0)
-	if store.Error() != nil {
-		return store.Error()
+	envelope, err := store.Insert(ctx, event, 0)
+	if err != nil {
+		return err
 	}
 
 	logger.Debug("inserted configuration event", "id", envelope.ID())
@@ -237,9 +237,9 @@ func insertMain(class string, data string, causation string) error {
 	}
 
 	// insert a document
-	envelope := store.Insert(ctx, event, causationID)
-	if store.Error() != nil {
-		return store.Error()
+	envelope, err := store.Insert(ctx, event, causationID)
+	if err != nil {
+		return err
 	}
 
 	logger.Debug("inserted new document", "id", envelope.ID())

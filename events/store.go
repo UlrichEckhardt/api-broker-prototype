@@ -52,7 +52,7 @@ type EventStore interface {
 	// The event is wrapped in an envelope and returned.
 	// The causation ID is that of the preceding event that caused this new
 	// event. It can be zero when its cause is not a preceding event.
-	Insert(ctx context.Context, event Event, causationID int32) Envelope
+	Insert(ctx context.Context, event Event, causationID int32) (Envelope, error)
 	// Retrieve just the event with the given ID.
 	RetrieveOne(ctx context.Context, id int32) Envelope
 	// Retrieve all currently existing events, which are provided via the returned channel.
