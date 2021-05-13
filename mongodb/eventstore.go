@@ -459,8 +459,13 @@ func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) (<-chan
 }
 
 // FollowNotifications implements the EventStore interface.
-func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) <-chan events.Notification {
+func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) (<-chan events.Notification, error) {
 	s.logger.Debug("following notifications")
+
+	// don't do anything if the error state of the store is set already
+	if s.err != nil {
+		return nil, s.err
+	}
 
 	out := make(chan events.Notification)
 
@@ -497,7 +502,7 @@ func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) <-chan even
 		}
 	}()
 
-	return out
+	return out, nil
 }
 
 // FollowEvents implements the EventStore interface.
@@ -526,7 +531,10 @@ func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-cha
 		}
 
 		// create notification channel
-		nch := s.FollowNotifications(ctx)
+		nch, err := s.FollowNotifications(ctx)
+		if err != nil {
+			return
+		}
 
 		// pump events
 		id := start

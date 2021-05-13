@@ -419,7 +419,10 @@ func watchMain() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := store.FollowNotifications(ctx)
+	ch, err := store.FollowNotifications(ctx)
+	if err != nil {
+		return err
+	}
 
 	// process notifications from the channel
 	for notification := range ch {
