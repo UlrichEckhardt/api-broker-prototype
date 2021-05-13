@@ -165,9 +165,9 @@ func initEventStore() error {
 	esLogger.SetHandler(handler)
 
 	// create an event store facade
-	s := mongodb.NewEventStore(esLogger, eventStoreDBHost)
-	if e := s.Error(); e != nil {
-		return e
+	s, err := mongodb.NewEventStore(esLogger, eventStoreDBHost)
+	if err != nil {
+		return err
 	}
 	store = s
 
@@ -196,9 +196,9 @@ func configureMain(retries uint) error {
 		Retries: int32(retries),
 	}
 
-	envelope := store.Insert(ctx, event, 0)
-	if store.Error() != nil {
-		return store.Error()
+	envelope, err := store.Insert(ctx, event, 0)
+	if err != nil {
+		return err
 	}
 
 	logger.Debug("inserted configuration event", "id", envelope.ID())
@@ -237,9 +237,9 @@ func insertMain(class string, data string, causation string) error {
 	}
 
 	// insert a document
-	envelope := store.Insert(ctx, event, causationID)
-	if store.Error() != nil {
-		return store.Error()
+	envelope, err := store.Insert(ctx, event, causationID)
+	if err != nil {
+		return err
 	}
 
 	logger.Debug("inserted new document", "id", envelope.ID())
@@ -266,7 +266,10 @@ func listMain(lastProcessed string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := store.LoadEvents(ctx, lastProcessedID)
+	ch, err := store.LoadEvents(ctx, lastProcessedID)
+	if err != nil {
+		return err
+	}
 
 	// process events from the channel
 	for envelope := range ch {
@@ -316,7 +319,10 @@ func processMain(lastProcessed string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := store.FollowEvents(ctx, lastProcessedID)
+	ch, err := store.FollowEvents(ctx, lastProcessedID)
+	if err != nil {
+		return err
+	}
 
 	// number of retries after a failed request
 	retries := uint(0)
@@ -416,7 +422,10 @@ func watchMain() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch := store.FollowNotifications(ctx)
+	ch, err := store.FollowNotifications(ctx)
+	if err != nil {
+		return err
+	}
 
 	// process notifications from the channel
 	for notification := range ch {

@@ -134,27 +134,29 @@ func connect(host string) (*mongo.Collection, *mongo.Collection, error) {
 }
 
 // NewEventStore creates and connects a MongoDBEventStore instance.
-func NewEventStore(logger log15.Logger, host string) *MongoDBEventStore {
+func NewEventStore(logger log15.Logger, host string) (*MongoDBEventStore, error) {
 	logger.Debug("creating event store")
 	s := MongoDBEventStore{
 		logger: logger,
 		codecs: make(map[string]MongoDBEventCodec),
 	}
+
+	// initialize collections
 	events, notifications, err := connect(host)
-	if err == nil {
-		// initialize collections
-		s.events = events
-		s.notifications = notifications
-	} else {
-		// set error state
-		s.err = err
+	if err != nil {
+		return nil, err
 	}
+	s.events = events
+	s.notifications = notifications
+
+	// register codecs
 	s.RegisterCodec(&ConfigurationEventCodec{})
 	s.RegisterCodec(&SimpleEventCodec{})
 	s.RegisterCodec(&RequestEventCodec{})
 	s.RegisterCodec(&ResponseEventCodec{})
 	s.RegisterCodec(&FailureEventCodec{})
-	return &s
+
+	return &s, nil
 }
 
 // RegisterCodec registers a codec that allows conversion of Events.
@@ -200,27 +202,25 @@ func (s *MongoDBEventStore) Close() error {
 }
 
 // Insert implements the EventStore interface.
-func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, causationID int32) events.Envelope {
-	s.logger.Debug("inserting event")
+func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, causationID int32) (events.Envelope, error) {
+	s.logger.Debug("inserting event", "class", event.Class(), "causation_id", causationID)
 
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
-		return nil
+		return nil, s.err
 	}
 
 	//  locate codec for the event class
 	class := event.Class()
 	codec := s.codecs[class]
 	if codec == nil {
-		s.err = errors.New("failed to locate codec for event")
-		return nil
+		return nil, errors.New("failed to locate codec for event")
 	}
 
 	// encode event for MongoDB storage
 	payload, err := codec.Serialize(event)
 	if err != nil {
-		s.err = err
-		return nil
+		return nil, err
 	}
 
 	env := mongoDBRawEnvelope{
@@ -232,7 +232,7 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, caus
 	// generate an ID
 	env.ID = s.findNextID(ctx)
 	if env.ID == 0 {
-		return nil
+		return nil, s.err
 	}
 
 	for {
@@ -245,23 +245,26 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, caus
 			// Check if the next free ID changed. In that case,
 			// just try again with the new ID.
 			id := s.findNextID(ctx)
+			if id == 0 {
+				return nil, s.err
+			}
 			if id != env.ID {
 				s.logger.Debug("retrying after race detection")
 				env.ID = id
 				continue
 			}
-			s.err = err
-			return nil
+			return nil, err
 		}
 
 		// decode the assigned object ID
 		id, ok := res.InsertedID.(int32)
 		if !ok {
 			s.err = errors.New("no ID returned from insert")
-			return nil
+			return nil, s.err
 		}
 		if id != env.ID {
 			s.err = errors.New("returned ID differs from written ID")
+			return nil, s.err
 		}
 		break
 	}
@@ -272,14 +275,15 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, caus
 	_, err = s.notifications.InsertOne(ctx, note)
 	if err != nil {
 		s.err = err
-		return nil
+		return nil, s.err
 	}
 
-	return &mongoDBEnvelope{
+	res := &mongoDBEnvelope{
 		IDVal:      env.ID,
 		CreatedVal: env.Created,
 		EventVal:   event,
 	}
+	return res, nil
 }
 
 // find next free ID to use for an insert
@@ -311,36 +315,36 @@ func (s *MongoDBEventStore) findNextID(ctx context.Context) int32 {
 }
 
 // RetrieveOne implements the EventStore interface.
-func (s *MongoDBEventStore) RetrieveOne(ctx context.Context, id int32) events.Envelope {
+func (s *MongoDBEventStore) RetrieveOne(ctx context.Context, id int32) (events.Envelope, error) {
 	s.logger.Debug("loading event", "id", id)
 
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
-		return nil
+		return nil, s.err
 	}
 
 	// The ID must be valid.
 	if id == 0 {
-		s.err = errors.New("provided document ID is null")
-		return nil
+		return nil, errors.New("provided document ID is null")
 	}
 
 	// retrieve the document from the DB
 	filter := bson.M{"_id": bson.M{"$eq": id}}
 	res := s.events.FindOne(ctx, filter)
 	if res.Err() == mongo.ErrNoDocuments {
-		s.err = errors.New("document not found")
-		return nil
+		return nil, errors.New("document not found")
 	}
 	if res.Err() != nil {
 		s.err = res.Err()
-		return nil
+		return nil, s.err
 	}
 
-	return s.decodeEnvelope(res)
+	return s.decodeEnvelope(res), s.err
 }
 
 // retrieveNext retrieves the event following the one with the given ID.
+// This will return the decoded envelope or nil if there is no next event. In
+// case of failure, it sets the error state.
 func (s *MongoDBEventStore) retrieveNext(ctx context.Context, id int32) *mongoDBEnvelope {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
@@ -369,6 +373,9 @@ func (s *MongoDBEventStore) retrieveNext(ctx context.Context, id int32) *mongoDB
 }
 
 // decode the envelope from a MongoDB lookup
+// This will return the decoded envelope. In case of failure, it sets the error
+// state. Errors here are non-recoverable, because they are caused by a mismatch
+// between the actual and expected DB structure.
 func (s *MongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnvelope {
 	var envelope mongoDBRawEnvelope
 	if err := raw.Decode(&envelope); err != nil {
@@ -397,8 +404,13 @@ func (s *MongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnve
 }
 
 // LoadEvents implements the EventStore interface.
-func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan events.Envelope {
+func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
 	s.logger.Debug("loading events", "following", start)
+
+	// don't do anything if the error state of the store is set already
+	if s.err != nil {
+		return nil, s.err
+	}
 
 	out := make(chan events.Envelope)
 
@@ -414,7 +426,8 @@ func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan 
 
 		// load the referenced start object to verify the ID is valid
 		if start != 0 {
-			ref := s.RetrieveOne(ctx, start)
+			// TODO: actually handle the error here
+			ref, _ := s.RetrieveOne(ctx, start)
 			if ref == nil {
 				return
 			}
@@ -442,12 +455,17 @@ func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) <-chan 
 		}
 	}()
 
-	return out
+	return out, nil
 }
 
 // FollowNotifications implements the EventStore interface.
-func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) <-chan events.Notification {
+func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) (<-chan events.Notification, error) {
 	s.logger.Debug("following notifications")
+
+	// don't do anything if the error state of the store is set already
+	if s.err != nil {
+		return nil, s.err
+	}
 
 	out := make(chan events.Notification)
 
@@ -484,12 +502,17 @@ func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) <-chan even
 		}
 	}()
 
-	return out
+	return out, nil
 }
 
 // FollowEvents implements the EventStore interface.
-func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-chan events.Envelope {
+func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
 	s.logger.Debug("following events")
+
+	// don't do anything if the error state of the store is set already
+	if s.err != nil {
+		return nil, s.err
+	}
 
 	out := make(chan events.Envelope)
 
@@ -505,14 +528,18 @@ func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-cha
 
 		// load the referenced start object to verify the ID is valid
 		if start != 0 {
-			ref := s.RetrieveOne(ctx, start)
+			// TODO: actually handle the error here
+			ref, _ := s.RetrieveOne(ctx, start)
 			if ref == nil {
 				return
 			}
 		}
 
 		// create notification channel
-		nch := s.FollowNotifications(ctx)
+		nch, err := s.FollowNotifications(ctx)
+		if err != nil {
+			return
+		}
 
 		// pump events
 		id := start
@@ -549,5 +576,5 @@ func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) <-cha
 		}
 	}()
 
-	return out
+	return out, nil
 }
