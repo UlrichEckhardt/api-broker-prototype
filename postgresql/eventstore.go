@@ -8,8 +8,17 @@ import (
 	"api-broker-prototype/events"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/inconshreveable/log15"
+	"github.com/jackc/pgx/v4"
 	"strconv"
+)
+
+const (
+	POSTGRES_USER     = "postgres"
+	POSTGRES_PASSWORD = "postgres"
+	POSTGRES_PORT     = "5432"
+	POSTGRES_DATABASE = "postgres"
 )
 
 // PostgreSQLEventStore implements the EventStore interface using a PostgreSQL DB
@@ -19,13 +28,39 @@ type PostgreSQLEventStore struct {
 	err    error
 }
 
+// connect to the PostgreSQL database
+// This will return the created connection instance. It will set the error
+// state of the eventstore instance and return `nil` on failure. Release the
+// returned connection using its `Close()` method.
+func (s *PostgreSQLEventStore) connect(ctx context.Context) *pgx.Conn {
+	// do nothing when there's already an error present
+	if s.err != nil {
+		return nil
+	}
+
+	cs := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s",
+		POSTGRES_USER,
+		POSTGRES_PASSWORD,
+		s.host,
+		POSTGRES_PORT,
+		POSTGRES_DATABASE,
+	)
+	conn, err := pgx.Connect(ctx, cs)
+	if err != nil {
+		s.err = err
+		return nil
+	}
+	return conn
+}
+
 // NewEventStore creates and connects a PostgreSQLEventStore instance.
 func NewEventStore(logger log15.Logger, host string) (*PostgreSQLEventStore, error) {
 	logger.Debug("creating event store", "host", host)
 	s := PostgreSQLEventStore{
 		logger: logger,
 		host:   host,
-		err:    errors.New("not implemented"),
+		err:    nil,
 	}
 
 	return &s, nil
@@ -46,20 +81,28 @@ func (s *PostgreSQLEventStore) Error() error {
 }
 
 // Error implements the EventStore and io.Closer interfaces.
+// Note that this must correctly release any resources even with the error state set!
 func (s *PostgreSQLEventStore) Close() error {
 	s.logger.Debug("closing eventstore")
 
-	// don't do anything if the error state of the store is set already
-	if s.err != nil {
-		return nil
-	}
+	// nothing to do, the eventstore doesn't bind any temporary resources
 
-	return errors.New("not implemented")
+	// set this error to block any further calls
+	s.err = errors.New("eventstore is closed")
+
+	return nil
 }
 
 // Insert implements the EventStore interface.
 func (s *PostgreSQLEventStore) Insert(ctx context.Context, event events.Event, causationID int32) (events.Envelope, error) {
 	s.logger.Debug("inserting event", "causation", causationID, "class", event.Class())
+
+	// establish connection
+	conn := s.connect(ctx)
+	if conn == nil {
+		return nil, s.err
+	}
+	defer conn.Close(ctx)
 
 	return nil, errors.New("not implemented")
 }
@@ -73,12 +116,28 @@ func (s *PostgreSQLEventStore) RetrieveOne(ctx context.Context, id int32) (event
 		return nil, errors.New("provided document ID is null")
 	}
 
+	// establish connection
+	conn := s.connect(ctx)
+	if conn == nil {
+		return nil, s.err
+	}
+	defer conn.Close(ctx)
+
 	return nil, errors.New("not implemented")
 }
 
 // LoadEvents implements the EventStore interface.
 func (s *PostgreSQLEventStore) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
 	s.logger.Debug("loading events", "start", start)
+
+	// establish connection
+	conn := s.connect(ctx)
+	if conn == nil {
+		return nil, s.err
+	}
+
+	// close connection on finish
+	defer conn.Close(ctx)
 
 	return nil, errors.New("not implemented")
 }
@@ -87,12 +146,30 @@ func (s *PostgreSQLEventStore) LoadEvents(ctx context.Context, start int32) (<-c
 func (s *PostgreSQLEventStore) FollowNotifications(ctx context.Context) (<-chan events.Notification, error) {
 	s.logger.Debug("following notifications")
 
+	// establish connection
+	conn := s.connect(ctx)
+	if conn == nil {
+		return nil, s.err
+	}
+
+	// close connection on finish
+	defer conn.Close(ctx)
+
 	return nil, errors.New("not implemented")
 }
 
 // FollowEvents implements the EventStore interface.
 func (s *PostgreSQLEventStore) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
 	s.logger.Debug("following events", "start", start)
+
+	// establish connection
+	conn := s.connect(ctx)
+	if conn == nil {
+		return nil, s.err
+	}
+
+	// close connection on finish
+	defer conn.Close(ctx)
 
 	return nil, errors.New("not implemented")
 }
