@@ -78,6 +78,7 @@ func (note *postgreSQLNotification) ID() int32 {
 type PostgreSQLEventStore struct {
 	logger log15.Logger
 	host   string
+	codecs map[string]PostgreSQLEventCodec
 	err    error
 }
 
@@ -113,10 +114,27 @@ func NewEventStore(logger log15.Logger, host string) (*PostgreSQLEventStore, err
 	s := PostgreSQLEventStore{
 		logger: logger,
 		host:   host,
+		codecs: make(map[string]PostgreSQLEventCodec),
 		err:    nil,
 	}
 
+	// register codecs
+	s.registerCodec(&simpleEventCodec{})
+	s.registerCodec(&configurationEventCodec{})
+	s.registerCodec(&requestEventCodec{})
+	s.registerCodec(&responseEventCodec{})
+	s.registerCodec(&failureEventCodec{})
+
 	return &s, nil
+}
+
+// registerCodec registers a codec that allows conversion of Events.
+func (s *PostgreSQLEventStore) registerCodec(codec PostgreSQLEventCodec) {
+	if codec == nil {
+		s.err = errors.New("nil codec registered")
+		return
+	}
+	s.codecs[codec.Class()] = codec
 }
 
 // ParseEventID implements the EventStore interface.
