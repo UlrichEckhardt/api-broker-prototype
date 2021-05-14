@@ -348,10 +348,45 @@ func (s *PostgreSQLEventStore) FollowNotifications(ctx context.Context) (<-chan 
 		return nil, s.err
 	}
 
-	// close connection on finish
-	defer conn.Close(ctx)
+	// run code to pump events in a goroutine
+	out := make(chan events.Notification)
+	go func() {
+		// close connection on finish
+		defer conn.Close(ctx)
+		// close channel on finish
+		defer close(out)
 
-	return nil, errors.New("not implemented")
+		// register as listening to notification channel
+		_, err := conn.Exec(
+			ctx,
+			"LISTEN notification;",
+		)
+		if err != nil {
+			s.err = err
+			return
+		}
+
+		// wait for notifications
+		for {
+			notification, err := conn.WaitForNotification(ctx)
+			if err != nil {
+				s.err = err
+				return
+			}
+
+			// extract event ID from the notification
+			id, err := s.ParseEventID(notification.Payload)
+			if err != nil {
+				s.err = err
+				return
+			}
+			out <- &postgreSQLNotification{
+				IDVal: id,
+			}
+		}
+	}()
+
+	return out, nil
 }
 
 // FollowEvents implements the EventStore interface.
