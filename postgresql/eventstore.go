@@ -234,7 +234,41 @@ func (s *PostgreSQLEventStore) RetrieveOne(ctx context.Context, id int32) (event
 	}
 	defer conn.Close(ctx)
 
-	return nil, errors.New("not implemented")
+	// retrieve row from DB
+	row := conn.QueryRow(
+		ctx,
+		`SELECT created, causation_id, class, payload FROM events WHERE id = $1;`,
+		id,
+	)
+
+	// extract fields from response
+	var created time.Time
+	var causationID int32
+	var class string
+	var payload pgtype.JSONB
+	if err := row.Scan(&created, &causationID, &class, &payload); err != nil {
+		return nil, err
+	}
+
+	// locate codec for the event class
+	codec := s.codecs[class]
+	if codec == nil {
+		return nil, errors.New("failed to locate codec for event")
+	}
+
+	// decode event from storage
+	event, err := codec.Deserialize(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	res := &postgreSQLEnvelope{
+		IDVal:          id,
+		CreatedVal:     created,
+		CausationIDVal: causationID,
+		EventVal:       event,
+	}
+	return res, nil
 }
 
 // LoadEvents implements the EventStore interface.
