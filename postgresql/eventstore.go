@@ -399,8 +399,81 @@ func (s *PostgreSQLEventStore) FollowEvents(ctx context.Context, start int32) (<
 		return nil, s.err
 	}
 
-	// close connection on finish
-	defer conn.Close(ctx)
+	// run code to pump events in a goroutine
+	out := make(chan events.Envelope)
+	go func() {
+		// close connection on finish
+		defer conn.Close(ctx)
+		// close channel on finish
+		defer close(out)
 
-	return nil, errors.New("not implemented")
+		// register as listening to notification channel
+		_, err := conn.Exec(
+			ctx,
+			"LISTEN notification;",
+		)
+		if err != nil {
+			s.err = err
+			return
+		}
+
+		for {
+			// retrieve rows from DB
+			rows, err := conn.Query(
+				ctx,
+				`SELECT id, created, causation_id, class, payload FROM events WHERE id > $1;`,
+				start,
+			)
+			if err != nil {
+				s.err = err
+				return
+			}
+
+			for rows.Next() {
+				// extract fields from response
+				var id int32
+				var created time.Time
+				var causationID int32
+				var class string
+				var payload pgtype.JSONB
+				if err := rows.Scan(&id, &created, &causationID, &class, &payload); err != nil {
+					s.err = err
+					return
+				}
+
+				// locate codec for the event class
+				codec := s.codecs[class]
+				if codec == nil {
+					s.err = errors.New("failed to locate codec for event")
+					return
+				}
+
+				// decode event from storage
+				event, err := codec.Deserialize(payload)
+				if err != nil {
+					s.err = err
+					return
+				}
+
+				out <- &postgreSQLEnvelope{
+					IDVal:          id,
+					CreatedVal:     created,
+					CausationIDVal: causationID,
+					EventVal:       event,
+				}
+
+				// remember new position in stream
+				start = id
+			}
+
+			// wait for notifications of new events
+			_, err = conn.WaitForNotification(ctx)
+			if err != nil {
+				s.err = err
+				return
+			}
+		}
+	}()
+
+	return out, nil
 }
