@@ -11,6 +11,10 @@ Dockerfile
 docker-compose.yml
 docker-compose.d/
 
+# support code
+shutdown.sh
+startup.sh
+
 #
 # Everything below is just a copy of .gitignore
 #
