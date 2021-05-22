@@ -3,6 +3,7 @@ package main
 import (
 	"api-broker-prototype/events"
 	"api-broker-prototype/mongodb"
+	"api-broker-prototype/postgresql"
 	"context"
 	"errors"
 	"github.com/inconshreveable/log15"
@@ -12,6 +13,7 @@ import (
 )
 
 var (
+	eventStoreDriver string
 	eventStoreDBHost string
 	logger           log15.Logger
 	store            events.EventStore
@@ -26,6 +28,13 @@ func main() {
 		Name:  "api-broker-prototype",
 		Usage: "prototype for an event-sourcing inspired API binding",
 		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:        "eventstore-driver",
+				EnvVars:     []string{"EVENTSTORE_DRIVER"},
+				Value:       "mongodb",
+				Usage:       "Driver for the event store, one of [mongodb, postgresql].",
+				Destination: &eventStoreDriver,
+			},
 			&cli.StringFlag{
 				Name:        "eventstore-db-host",
 				EnvVars:     []string{"EVENTSTORE_DB_HOST"},
@@ -165,7 +174,16 @@ func initEventStore() error {
 	esLogger.SetHandler(handler)
 
 	// create an event store facade
-	s, err := mongodb.NewEventStore(esLogger, eventStoreDBHost)
+	var s events.EventStore
+	var err error
+	switch eventStoreDriver {
+	case "mongodb":
+		s, err = mongodb.NewEventStore(esLogger, eventStoreDBHost)
+	case "postgresql":
+		s, err = postgresql.NewEventStore(esLogger, eventStoreDBHost)
+	default:
+		err = errors.New("invalid driver selected")
+	}
 	if err != nil {
 		return err
 	}

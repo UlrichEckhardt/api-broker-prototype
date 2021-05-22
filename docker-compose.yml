@@ -23,3 +23,14 @@ services:
       - type: bind
         source: ./docker-compose.d/setup-mongodb-event-store.sh
         target: /docker-entrypoint-initdb.d/setup-event-store.sh
+
+  postgres:
+    image: postgres:13.3
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - 5432:5432
+    volumes:
+      - type: bind
+        source: ./docker-compose.d/setup-postgresql-event-store.sh
+        target: /docker-entrypoint-initdb.d/setup-event-store.sh
