@@ -68,33 +68,87 @@ func (s *LoggingDecoratorEventStore) RetrieveOne(ctx context.Context, id int32) 
 
 func (s *LoggingDecoratorEventStore) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
 	s.logger.Debug("Loading events.", "start", start)
-	str, err := s.eventstore.LoadEvents(ctx, start)
-	if err == nil {
-		s.logger.Debug("Loaded events.")
-	} else {
+	stream, err := s.eventstore.LoadEvents(ctx, start)
+	if err != nil {
 		s.logger.Debug("Failed to load events.", "error", err)
+		return stream, err
 	}
-	return str, err
+	s.logger.Debug("Loaded events.")
+
+	// create intermediate stream to intercept and log the events loaded
+	res := make(chan events.Envelope)
+	go func() {
+		// close channel on finish
+		defer close(res)
+
+		for env := range stream {
+			s.logger.Debug(
+				"Loaded event.",
+				"id", env.ID(),
+				"class", env.Event().Class(),
+				"causation_id", env.CausationID(),
+				"created", env.Created(),
+			)
+			res <- env
+		}
+	}()
+
+	return res, nil
 }
 
 func (s *LoggingDecoratorEventStore) FollowNotifications(ctx context.Context) (<-chan events.Notification, error) {
 	s.logger.Debug("Loading notification stream.")
-	str, err := s.eventstore.FollowNotifications(ctx)
-	if err == nil {
-		s.logger.Debug("Loaded notification stream.")
-	} else {
+	stream, err := s.eventstore.FollowNotifications(ctx)
+	if err != nil {
 		s.logger.Debug("Failed to load notification stream.", "error", err)
+		return stream, err
 	}
-	return str, err
+	s.logger.Debug("Loaded notification stream.")
+
+	// create intermediate stream to intercept and log the notifications loaded
+	res := make(chan events.Notification)
+	go func() {
+		// close channel on finish
+		defer close(res)
+
+		for notification := range stream {
+			s.logger.Debug(
+				"Loaded notification.",
+				"id", notification.ID(),
+			)
+			res <- notification
+		}
+	}()
+
+	return res, nil
 }
 
 func (s *LoggingDecoratorEventStore) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
 	s.logger.Debug("Loading event stream.", "start", start)
-	str, err := s.eventstore.FollowEvents(ctx, start)
-	if err == nil {
-		s.logger.Debug("Loaded event stream.")
-	} else {
+	stream, err := s.eventstore.FollowEvents(ctx, start)
+	if err != nil {
 		s.logger.Debug("Failed to load event stream.", "error", err)
+		return stream, err
 	}
-	return str, err
+	s.logger.Debug("Loaded event stream.")
+
+	// create intermediate stream to intercept and log the events loaded
+	res := make(chan events.Envelope)
+	go func() {
+		// close channel on finish
+		defer close(res)
+
+		for env := range stream {
+			s.logger.Debug(
+				"Loaded event.",
+				"id", env.ID(),
+				"class", env.Event().Class(),
+				"causation_id", env.CausationID(),
+				"created", env.Created(),
+			)
+			res <- env
+		}
+	}()
+
+	return res, nil
 }
