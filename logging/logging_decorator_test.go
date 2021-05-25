@@ -90,10 +90,11 @@ func (logger *loggerMock) Crit(msg string, ctx ...interface{}) {
 func createMock() *LoggingDecoratorEventStore {
 	logger := &loggerMock{}
 	eventstore := &eventstoreMock{}
-	return &LoggingDecoratorEventStore{
-		logger:     logger,
-		eventstore: eventstore,
+	decorator, err := NewLoggingDecorator(eventstore, logger)
+	if err != nil {
+		panic(err)
 	}
+	return decorator
 }
 
 // make sure the decorator implements the event store interface

@@ -8,6 +8,7 @@ package logging
 import (
 	"api-broker-prototype/events"
 	"context"
+	"errors"
 	"github.com/inconshreveable/log15"
 )
 
@@ -15,6 +16,20 @@ import (
 type LoggingDecoratorEventStore struct {
 	logger     log15.Logger
 	eventstore events.EventStore
+}
+
+func NewLoggingDecorator(eventstore events.EventStore, logger log15.Logger) (*LoggingDecoratorEventStore, error) {
+	if eventstore == nil {
+		return nil, errors.New("eventstore is nil")
+	}
+	if logger == nil {
+		return nil, errors.New("logger is nil")
+	}
+	res := &LoggingDecoratorEventStore{
+		eventstore: eventstore,
+		logger:     logger,
+	}
+	return res, nil
 }
 
 func (s *LoggingDecoratorEventStore) ParseEventID(str string) (int32, error) {
