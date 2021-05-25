@@ -2,6 +2,7 @@ package main
 
 import (
 	"api-broker-prototype/events"
+	"api-broker-prototype/logging"
 	"api-broker-prototype/mongodb"
 	"api-broker-prototype/postgresql"
 	"context"
@@ -195,6 +196,13 @@ func initEventStore() error {
 	if err != nil {
 		return err
 	}
+
+	// add a logging decorator in front
+	s, err = logging.NewLoggingDecorator(s, esLogger)
+	if err != nil {
+		return err
+	}
+
 	store = s
 
 	logger.Info("initialized event store", "host", eventStoreDBHost)
