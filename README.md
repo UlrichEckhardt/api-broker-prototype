@@ -70,3 +70,11 @@ It uses ideas prevalent in Domain Driven Design, namely Event Sourcing and CQRS,
    their contents.
  - Finally, you can kill the event processor and shut down the whole setup
    using `docker-compose rm --stop --force`.
+
+## Switching the storage backend
+
+There are two storage backends implemented, one based on MongoDB (the default),
+the other on PostgreSQL. In their use, they shouldn't be different. You can
+switch using
+* Commandline flag `--eventstore-driver postgresql|mongodb`
+* Environment variable `EVENTSTORE_DRIVER=postgresql|mongodb`
