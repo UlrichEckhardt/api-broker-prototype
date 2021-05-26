@@ -9,7 +9,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/inconshreveable/log15"
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"strconv"
@@ -76,7 +75,6 @@ func (note *postgreSQLNotification) ID() int32 {
 
 // PostgreSQLEventStore implements the EventStore interface using a PostgreSQL DB
 type PostgreSQLEventStore struct {
-	logger log15.Logger
 	host   string
 	codecs map[string]PostgreSQLEventCodec
 	err    error
@@ -109,10 +107,8 @@ func (s *PostgreSQLEventStore) connect(ctx context.Context) *pgx.Conn {
 }
 
 // NewEventStore creates and connects a PostgreSQLEventStore instance.
-func NewEventStore(logger log15.Logger, host string) (*PostgreSQLEventStore, error) {
-	logger.Debug("creating event store", "host", host)
+func NewEventStore(host string) (*PostgreSQLEventStore, error) {
 	s := PostgreSQLEventStore{
-		logger: logger,
 		host:   host,
 		codecs: make(map[string]PostgreSQLEventCodec),
 		err:    nil,
@@ -154,8 +150,6 @@ func (s *PostgreSQLEventStore) Error() error {
 // Error implements the EventStore and io.Closer interfaces.
 // Note that this must correctly release any resources even with the error state set!
 func (s *PostgreSQLEventStore) Close() error {
-	s.logger.Debug("closing eventstore")
-
 	// nothing to do, the eventstore doesn't bind any temporary resources
 
 	// set this error to block any further calls
@@ -166,8 +160,6 @@ func (s *PostgreSQLEventStore) Close() error {
 
 // Insert implements the EventStore interface.
 func (s *PostgreSQLEventStore) Insert(ctx context.Context, event events.Event, causationID int32) (events.Envelope, error) {
-	s.logger.Debug("inserting event", "causation", causationID, "class", event.Class())
-
 	// locate codec for the event class
 	class := event.Class()
 	codec := s.codecs[class]
@@ -202,11 +194,9 @@ func (s *PostgreSQLEventStore) Insert(ctx context.Context, event events.Event, c
 	// retrieve assigned ID from response
 	var id int32
 	if err = row.Scan(&id); err != nil {
-		s.logger.Error("Unable to insert into the 'messages' table.", "error", err)
+		// unable to insert into the 'messages' table.
 		return nil, err
 	}
-
-	s.logger.Debug("Inserted data into 'messages' table.", "id", id)
 
 	res := &postgreSQLEnvelope{
 		IDVal:          id,
@@ -220,8 +210,6 @@ func (s *PostgreSQLEventStore) Insert(ctx context.Context, event events.Event, c
 
 // RetrieveOne implements the EventStore interface.
 func (s *PostgreSQLEventStore) RetrieveOne(ctx context.Context, id int32) (events.Envelope, error) {
-	s.logger.Debug("loading event", "id", id)
-
 	// The ID must be valid.
 	if id == 0 {
 		return nil, errors.New("provided document ID is null")
@@ -273,8 +261,6 @@ func (s *PostgreSQLEventStore) RetrieveOne(ctx context.Context, id int32) (event
 
 // LoadEvents implements the EventStore interface.
 func (s *PostgreSQLEventStore) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
-	s.logger.Debug("loading events", "start", start)
-
 	// establish connection
 	conn := s.connect(ctx)
 	if conn == nil {
@@ -340,8 +326,6 @@ func (s *PostgreSQLEventStore) LoadEvents(ctx context.Context, start int32) (<-c
 
 // FollowNotifications implements the EventStore interface.
 func (s *PostgreSQLEventStore) FollowNotifications(ctx context.Context) (<-chan events.Notification, error) {
-	s.logger.Debug("following notifications")
-
 	// establish connection
 	conn := s.connect(ctx)
 	if conn == nil {
@@ -391,8 +375,6 @@ func (s *PostgreSQLEventStore) FollowNotifications(ctx context.Context) (<-chan 
 
 // FollowEvents implements the EventStore interface.
 func (s *PostgreSQLEventStore) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
-	s.logger.Debug("following events", "start", start)
-
 	// establish connection
 	conn := s.connect(ctx)
 	if conn == nil {

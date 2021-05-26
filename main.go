@@ -189,7 +189,7 @@ func initEventStore() error {
 	case "mongodb":
 		s, err = mongodb.NewEventStore(eventStoreDBHost)
 	case "postgresql":
-		s, err = postgresql.NewEventStore(esLogger, eventStoreDBHost)
+		s, err = postgresql.NewEventStore(eventStoreDBHost)
 	default:
 		err = errors.New("invalid driver selected")
 	}
