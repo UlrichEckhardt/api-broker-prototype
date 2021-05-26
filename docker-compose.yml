@@ -8,8 +8,6 @@ services:
     depends_on:
       - mongodb
       - postgresql
-    environment:
-      - EVENTSTORE_DB_HOST=mongodb
 
   mongodb:
     image: mongo:4.2
