@@ -2,6 +2,7 @@ package main
 
 import (
 	"api-broker-prototype/events"
+	"api-broker-prototype/logging"
 	"api-broker-prototype/mongodb"
 	"api-broker-prototype/postgresql"
 	"context"
@@ -13,10 +14,11 @@ import (
 )
 
 var (
-	eventStoreDriver string
-	eventStoreDBHost string
-	logger           log15.Logger
-	store            events.EventStore
+	eventStoreDriver   string
+	eventStoreDBHost   string
+	eventStoreLoglevel string
+	logger             log15.Logger
+	store              events.EventStore
 )
 
 func main() {
@@ -41,6 +43,13 @@ func main() {
 				Value:       "localhost",
 				Usage:       "Hostname of the DB server for the event store.",
 				Destination: &eventStoreDBHost,
+			},
+			&cli.StringFlag{
+				Name:        "eventstore-loglevel",
+				EnvVars:     []string{"EVENTSTORE_LOGLEVEL"},
+				Value:       "info",
+				Usage:       "Minimum loglevel for event store operations.",
+				Destination: &eventStoreLoglevel,
 			},
 		},
 		Commands: []*cli.Command{
@@ -166,8 +175,9 @@ func configureAPIStub(c *cli.Context) {
 }
 
 func initEventStore() error {
+	loglevel, err := log15.LvlFromString(eventStoreLoglevel)
 	// setup log handler
-	handler := log15.LvlFilterHandler(log15.LvlInfo, logger.GetHandler())
+	handler := log15.LvlFilterHandler(loglevel, logger.GetHandler())
 
 	// setup logger for event store
 	esLogger := log15.New("context", "event store")
@@ -175,18 +185,24 @@ func initEventStore() error {
 
 	// create an event store facade
 	var s events.EventStore
-	var err error
 	switch eventStoreDriver {
 	case "mongodb":
-		s, err = mongodb.NewEventStore(esLogger, eventStoreDBHost)
+		s, err = mongodb.NewEventStore(eventStoreDBHost)
 	case "postgresql":
-		s, err = postgresql.NewEventStore(esLogger, eventStoreDBHost)
+		s, err = postgresql.NewEventStore(eventStoreDBHost)
 	default:
 		err = errors.New("invalid driver selected")
 	}
 	if err != nil {
 		return err
 	}
+
+	// add a logging decorator in front
+	s, err = logging.NewLoggingDecorator(s, esLogger)
+	if err != nil {
+		return err
+	}
+
 	store = s
 
 	logger.Info("initialized event store", "host", eventStoreDBHost)

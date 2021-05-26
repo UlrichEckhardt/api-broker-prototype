@@ -78,3 +78,10 @@ the other on PostgreSQL. In their use, they shouldn't be different. You can
 switch using
 * Commandline flag `--eventstore-driver postgresql|mongodb`
 * Environment variable `EVENTSTORE_DRIVER=postgresql|mongodb`
+
+# Diagnostics
+You can use
+* Commandline flag `--eventstore-loglevel debug|info|warn|error|crit`
+* Environment variable `EVENTSTORE_LOGLEVEL=debug|info|warn|error|crit`
+to control the amount of info logged. Currently, the default is "info", while
+all log messages are at level "debug".

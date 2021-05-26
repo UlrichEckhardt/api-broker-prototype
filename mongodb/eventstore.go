@@ -12,7 +12,6 @@ import (
 	"api-broker-prototype/events"
 	"context"
 	"errors"
-	"github.com/inconshreveable/log15"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -95,7 +94,6 @@ type MongoDBEventStore struct {
 	events        *mongo.Collection
 	notifications *mongo.Collection
 	err           error
-	logger        log15.Logger
 	codecs        map[string]MongoDBEventCodec
 }
 
@@ -134,10 +132,8 @@ func connect(host string) (*mongo.Collection, *mongo.Collection, error) {
 }
 
 // NewEventStore creates and connects a MongoDBEventStore instance.
-func NewEventStore(logger log15.Logger, host string) (*MongoDBEventStore, error) {
-	logger.Debug("creating event store")
+func NewEventStore(host string) (*MongoDBEventStore, error) {
 	s := MongoDBEventStore{
-		logger: logger,
 		codecs: make(map[string]MongoDBEventCodec),
 	}
 
@@ -184,8 +180,6 @@ func (s *MongoDBEventStore) Error() error {
 
 // Error implements the EventStore and io.Closer interfaces.
 func (s *MongoDBEventStore) Close() error {
-	s.logger.Debug("closing eventstore")
-
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil
@@ -203,8 +197,6 @@ func (s *MongoDBEventStore) Close() error {
 
 // Insert implements the EventStore interface.
 func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, causationID int32) (events.Envelope, error) {
-	s.logger.Debug("inserting event", "class", event.Class(), "causation_id", causationID)
-
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil, s.err
@@ -249,7 +241,7 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, caus
 				return nil, s.err
 			}
 			if id != env.ID {
-				s.logger.Debug("retrying after race detection")
+				// retrying after race detection
 				env.ID = id
 				continue
 			}
@@ -316,8 +308,6 @@ func (s *MongoDBEventStore) findNextID(ctx context.Context) int32 {
 
 // RetrieveOne implements the EventStore interface.
 func (s *MongoDBEventStore) RetrieveOne(ctx context.Context, id int32) (events.Envelope, error) {
-	s.logger.Debug("loading event", "id", id)
-
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil, s.err
@@ -405,8 +395,6 @@ func (s *MongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnve
 
 // LoadEvents implements the EventStore interface.
 func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
-	s.logger.Debug("loading events", "following", start)
-
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil, s.err
@@ -447,7 +435,6 @@ func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) (<-chan
 			}
 
 			// emit envelope
-			s.logger.Debug("loaded event", "id", envelope.ID())
 			out <- envelope
 
 			// move to next element
@@ -460,8 +447,6 @@ func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) (<-chan
 
 // FollowNotifications implements the EventStore interface.
 func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) (<-chan events.Notification, error) {
-	s.logger.Debug("following notifications")
-
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil, s.err
@@ -497,7 +482,6 @@ func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) (<-chan eve
 				s.err = err
 				return
 			}
-			s.logger.Debug("loaded notification", "id", note.ID())
 			out <- &note
 		}
 	}()
@@ -507,8 +491,6 @@ func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) (<-chan eve
 
 // FollowEvents implements the EventStore interface.
 func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
-	s.logger.Debug("following events")
-
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil, s.err
@@ -555,20 +537,18 @@ func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) (<-ch
 				// which are emitted when new events are queued.
 				select {
 				case <-ctx.Done():
-					s.logger.Debug("cancelled by context", "error", ctx.Err())
+					// cancelled by context
 					return
 				case notification := <-nch:
 					if notification == nil {
-						s.logger.Debug("notification channel closed")
+						// notification channel closed
 						return
 					}
-					s.logger.Debug("received notification", "id", notification.ID())
 					continue
 				}
 			}
 
 			// emit envelope
-			s.logger.Debug("loaded event", "id", envelope.ID())
 			out <- envelope
 
 			// move to next element
