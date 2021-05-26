@@ -187,7 +187,7 @@ func initEventStore() error {
 	var s events.EventStore
 	switch eventStoreDriver {
 	case "mongodb":
-		s, err = mongodb.NewEventStore(esLogger, eventStoreDBHost)
+		s, err = mongodb.NewEventStore(eventStoreDBHost)
 	case "postgresql":
 		s, err = postgresql.NewEventStore(esLogger, eventStoreDBHost)
 	default:
