@@ -122,6 +122,7 @@ func (codec *responseEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error
 	res := pgtype.JSONB{}
 	err := res.Set(
 		dataRecord{
+			"attempt":  event.Attempt,
 			"response": event.Response,
 		},
 	)
@@ -136,6 +137,7 @@ func (codec *responseEventCodec) Deserialize(data pgtype.JSONB) (events.Event, e
 	tmp := dataRecord{}
 	err := data.AssignTo(&tmp)
 	res := events.ResponseEvent{
+		Attempt:  (uint)(tmp["attempt"].(float64)),
 		Response: tmp["response"].(string),
 	}
 	return res, err
@@ -154,6 +156,7 @@ func (codec *failureEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error)
 	res := pgtype.JSONB{}
 	err := res.Set(
 		dataRecord{
+			"attempt": event.Attempt,
 			"failure": event.Failure,
 		},
 	)
@@ -168,6 +171,7 @@ func (codec *failureEventCodec) Deserialize(data pgtype.JSONB) (events.Event, er
 	tmp := dataRecord{}
 	err := data.AssignTo(&tmp)
 	res := events.FailureEvent{
+		Attempt: (uint)(tmp["attempt"].(float64)),
 		Failure: tmp["failure"].(string),
 	}
 	return res, err
