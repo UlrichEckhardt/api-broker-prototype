@@ -125,6 +125,11 @@ func main() {
 						Usage: "Fraction of API requests that fail.",
 					},
 					&cli.Float64Flag{
+						Name:  "api-silent-failure-rate",
+						Value: 0.0,
+						Usage: "Fraction of API requests that don't produce any response.",
+					},
+					&cli.Float64Flag{
 						Name:  "api-min-latency",
 						Value: 0.0,
 						Usage: "Minimal API latency.",
@@ -193,6 +198,7 @@ func main() {
 func configureAPIStub(c *cli.Context) {
 	ConfigureStub(
 		c.Float64("api-failure-rate"),
+		c.Float64("api-silent-failure-rate"),
 		c.Float64("api-min-latency"),
 		c.Float64("api-max-latency"),
 	)
@@ -351,16 +357,16 @@ func callAPI(ctx context.Context, store events.EventStore, event events.RequestE
 	response, err := ProcessRequest(event.Request)
 
 	// store results as event
-	if err == nil {
+	if response != nil {
 		store.Insert(
 			ctx,
 			events.ResponseEvent{
 				Attempt:  attempt,
-				Response: response,
+				Response: *response,
 			},
 			causationID,
 		)
-	} else {
+	} else if err != nil {
 		store.Insert(
 			ctx,
 			events.FailureEvent{
@@ -369,6 +375,8 @@ func callAPI(ctx context.Context, store events.EventStore, event events.RequestE
 			},
 			causationID,
 		)
+	} else {
+		logger.Info("No response from API.")
 	}
 }
 
