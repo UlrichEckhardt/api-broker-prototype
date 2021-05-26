@@ -162,9 +162,11 @@ func TestResponseCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test response": {
 			event: events.ResponseEvent{
+				Attempt:  uint(0),
 				Response: "some response",
 			},
 			data: bson.M{
+				"attempt":  int64(0),
 				"response": "some response",
 			},
 		},
@@ -180,9 +182,11 @@ func TestFailureCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test failure": {
 			event: events.FailureEvent{
+				Attempt: uint(0),
 				Failure: "some failure",
 			},
 			data: bson.M{
+				"attempt": int64(0),
 				"failure": "some failure",
 			},
 		},

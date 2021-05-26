@@ -132,7 +132,14 @@ func TestResponseCodec(t *testing.T) {
 			event: events.ResponseEvent{
 				Response: "some response",
 			},
-			data: `{"response":"some response"}`,
+			data: `{"attempt":0,"response":"some response"}`,
+		},
+		"test 2": {
+			event: events.ResponseEvent{
+				Attempt:  uint(4),
+				Response: "some response",
+			},
+			data: `{"attempt":4,"response":"some response"}`,
 		},
 	}
 
@@ -149,7 +156,14 @@ func TestFailureCodec(t *testing.T) {
 			event: events.FailureEvent{
 				Failure: "some failure",
 			},
-			data: `{"failure":"some failure"}`,
+			data: `{"attempt":0,"failure":"some failure"}`,
+		},
+		"test 2": {
+			event: events.FailureEvent{
+				Attempt: uint(4),
+				Failure: "some failure",
+			},
+			data: `{"attempt":4,"failure":"some failure"}`,
 		},
 	}
 

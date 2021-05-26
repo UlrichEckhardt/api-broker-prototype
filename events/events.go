@@ -48,6 +48,7 @@ func (e RequestEvent) Class() string {
 // Note that this does not discriminate between success or failure. Rather,
 // any response is stored here.
 type ResponseEvent struct {
+	Attempt  uint // zero-based index of the attempt
 	Response string
 }
 
@@ -60,6 +61,7 @@ func (e ResponseEvent) Class() string {
 // By its very nature, these kinds of failure are generated locally, like e.g.
 // the failure to resolve a remote name.
 type FailureEvent struct {
+	Attempt uint // zero-based index of the attempt
 	Failure string
 }
 
