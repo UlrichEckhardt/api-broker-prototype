@@ -2,6 +2,7 @@ package main
 
 import (
 	"api-broker-prototype/events"
+	"api-broker-prototype/logging"
 	"api-broker-prototype/mongodb"
 	"api-broker-prototype/postgresql"
 	"context"
@@ -13,10 +14,11 @@ import (
 )
 
 var (
-	eventStoreDriver string
-	eventStoreDBHost string
-	logger           log15.Logger
-	store            events.EventStore
+	eventStoreDriver   string
+	eventStoreDBHost   string
+	eventStoreLoglevel string
+	logger             log15.Logger
+	store              events.EventStore
 )
 
 func main() {
@@ -41,6 +43,13 @@ func main() {
 				Value:       "localhost",
 				Usage:       "Hostname of the DB server for the event store.",
 				Destination: &eventStoreDBHost,
+			},
+			&cli.StringFlag{
+				Name:        "eventstore-loglevel",
+				EnvVars:     []string{"EVENTSTORE_LOGLEVEL"},
+				Value:       "info",
+				Usage:       "Minimum loglevel for event store operations.",
+				Destination: &eventStoreLoglevel,
 			},
 		},
 		Commands: []*cli.Command{
@@ -166,8 +175,9 @@ func configureAPIStub(c *cli.Context) {
 }
 
 func initEventStore() error {
+	loglevel, err := log15.LvlFromString(eventStoreLoglevel)
 	// setup log handler
-	handler := log15.LvlFilterHandler(log15.LvlInfo, logger.GetHandler())
+	handler := log15.LvlFilterHandler(loglevel, logger.GetHandler())
 
 	// setup logger for event store
 	esLogger := log15.New("context", "event store")
@@ -175,18 +185,24 @@ func initEventStore() error {
 
 	// create an event store facade
 	var s events.EventStore
-	var err error
 	switch eventStoreDriver {
 	case "mongodb":
-		s, err = mongodb.NewEventStore(esLogger, eventStoreDBHost)
+		s, err = mongodb.NewEventStore(eventStoreDBHost)
 	case "postgresql":
-		s, err = postgresql.NewEventStore(esLogger, eventStoreDBHost)
+		s, err = postgresql.NewEventStore(eventStoreDBHost)
 	default:
 		err = errors.New("invalid driver selected")
 	}
 	if err != nil {
 		return err
 	}
+
+	// add a logging decorator in front
+	s, err = logging.NewLoggingDecorator(s, esLogger)
+	if err != nil {
+		return err
+	}
+
 	store = s
 
 	logger.Info("initialized event store", "host", eventStoreDBHost)
@@ -305,15 +321,29 @@ func listMain(lastProcessed string) error {
 }
 
 // utility function to invoke the API and store the result as event
-func callAPI(ctx context.Context, store events.EventStore, event events.RequestEvent, causationID int32) {
+func callAPI(ctx context.Context, store events.EventStore, event events.RequestEvent, causationID int32, attempt uint) {
 	// delegate to API stub
 	response, err := ProcessRequest(event.Request)
 
 	// store results as event
 	if err == nil {
-		store.Insert(ctx, events.ResponseEvent{Response: response}, causationID)
+		store.Insert(
+			ctx,
+			events.ResponseEvent{
+				Attempt:  attempt,
+				Response: response,
+			},
+			causationID,
+		)
 	} else {
-		store.Insert(ctx, events.FailureEvent{Failure: err.Error()}, causationID)
+		store.Insert(
+			ctx,
+			events.FailureEvent{
+				Attempt: attempt,
+				Failure: err.Error(),
+			},
+			causationID,
+		)
 	}
 }
 
@@ -346,9 +376,11 @@ func processMain(lastProcessed string) error {
 	retries := uint(0)
 
 	// map of requests being processed currently
+	// This combines the request data and metadata used for processing it.
 	type requestState struct {
-		request events.Envelope
-		retries uint // number of retries left
+		request     events.Envelope
+		maxAttempts uint
+		attempts    uint
 	}
 	calls := make(map[int32]*requestState)
 
@@ -376,14 +408,16 @@ func processMain(lastProcessed string) error {
 		case events.RequestEvent:
 			logger.Info("starting API call")
 
-			// create record to correlate the response with it
-			calls[envelope.ID()] = &requestState{
-				request: envelope,
-				retries: retries,
+			// create record to correlate the results with it
+			call := &requestState{
+				request:     envelope,
+				maxAttempts: 1 + retries,
 			}
+			calls[envelope.ID()] = call
 
-			// trigger event processing asynchronously
-			go callAPI(ctx, store, event, envelope.ID())
+			// try event processing asynchronously
+			go callAPI(ctx, store, event, envelope.ID(), call.attempts)
+			call.attempts++
 
 		case events.ResponseEvent:
 			// fetch the request event
@@ -415,15 +449,15 @@ func processMain(lastProcessed string) error {
 			}
 
 			// check if any retries remain
-			if call.retries == 0 {
+			if call.attempts == call.maxAttempts {
 				delete(calls, requestID)
 				logger.Info("failed API call")
 				break
 			}
 
-			// decrement retry counter and try again asynchronously
-			call.retries--
-			go callAPI(ctx, store, call.request.Event().(events.RequestEvent), call.request.ID())
+			// retry event processing asynchronously
+			go callAPI(ctx, store, call.request.Event().(events.RequestEvent), call.request.ID(), call.attempts)
+			call.attempts++
 		}
 	}
 

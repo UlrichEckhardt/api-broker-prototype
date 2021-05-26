@@ -7,8 +7,7 @@ services:
     build: .
     depends_on:
       - mongodb
-    environment:
-      - EVENTSTORE_DB_HOST=mongodb
+      - postgresql
 
   mongodb:
     image: mongo:4.2
@@ -24,7 +23,7 @@ services:
         source: ./docker-compose.d/setup-mongodb-event-store.sh
         target: /docker-entrypoint-initdb.d/setup-event-store.sh
 
-  postgres:
+  postgresql:
     image: postgres:13.3
     environment:
       - POSTGRES_PASSWORD=postgres
