@@ -58,17 +58,22 @@ func main() {
 				Usage:     "Insert a configuration event into the store.",
 				ArgsUsage: " ",
 				Flags: []cli.Flag{
-					&cli.UintFlag{
+					&cli.IntFlag{
 						Name:  "retries",
-						Value: 0,
+						Value: -1,
 						Usage: "number of times to retry a failed request",
+					},
+					&cli.Float64Flag{
+						Name:  "timeout",
+						Value: -1,
+						Usage: "maximum duration for a request",
 					},
 				},
 				Action: func(c *cli.Context) error {
 					if c.NArg() > 0 {
 						return errors.New("no arguments expected")
 					}
-					return configureMain(c.Uint("retries"))
+					return configureMain(c.Int("retries"), c.Float64("timeout"))
 				},
 			},
 			{
@@ -217,7 +222,7 @@ func finalizeEventStore() {
 }
 
 // insert a configuration event
-func configureMain(retries uint) error {
+func configureMain(retries int, timeout float64) error {
 	if err := initEventStore(); err != nil {
 		return err
 	}
@@ -228,6 +233,7 @@ func configureMain(retries uint) error {
 
 	event := events.ConfigurationEvent{
 		Retries: int32(retries),
+		Timeout: timeout,
 	}
 
 	envelope, err := store.Insert(ctx, event, 0)
