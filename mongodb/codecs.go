@@ -40,13 +40,14 @@ func (codec *ConfigurationEventCodec) Class() string {
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *ConfigurationEventCodec) Serialize(e events.Event) (bson.M, error) {
 	ev := e.(events.ConfigurationEvent)
-	return bson.M{"retries": ev.Retries}, nil
+	return bson.M{"retries": ev.Retries, "timeout": ev.Timeout}, nil
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
 func (codec *ConfigurationEventCodec) Deserialize(data bson.M) (events.Event, error) {
 	res := events.ConfigurationEvent{
 		Retries: data["retries"].(int32),
+		Timeout: data["timeout"].(float64),
 	}
 	return res, nil
 }

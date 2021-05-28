@@ -127,9 +127,11 @@ func TestConfigurationCodec(t *testing.T) {
 		"test configuration": {
 			event: events.ConfigurationEvent{
 				Retries: 2,
+				Timeout: 2.5,
 			},
 			data: bson.M{
 				"retries": int32(2),
+				"timeout": float64(2.5),
 			},
 		},
 	}
