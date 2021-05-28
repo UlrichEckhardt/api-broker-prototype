@@ -97,8 +97,9 @@ func TestConfigurationCodec(t *testing.T) {
 		"test 1": {
 			event: events.ConfigurationEvent{
 				Retries: 2,
+				Timeout: 2.5,
 			},
-			data: `{"retries":2}`,
+			data: `{"retries":2,"timeout":2.5}`,
 		},
 	}
 
