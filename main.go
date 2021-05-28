@@ -380,6 +380,8 @@ func processMain(lastProcessed string) error {
 
 	// number of retries after a failed request
 	retries := uint(0)
+	// maximum duration before considering an attempt failed
+	timeout := 5 * time.Second
 
 	// map of requests being processed currently
 	// This combines the request data and metadata used for processing it.
@@ -406,10 +408,21 @@ func processMain(lastProcessed string) error {
 			logger.Info(
 				"updating API configuration",
 				"retries", event.Retries,
+				"timeout", event.Timeout,
 			)
 
 			// store configuration
-			retries = uint(event.Retries)
+			if event.Retries >= 0 {
+				retries = uint(event.Retries)
+			}
+			if event.Timeout >= 0 {
+				timeout = time.Duration(event.Timeout * float64(time.Second))
+			}
+			logger.Info(
+				"updated API configuration",
+				"retries", retries,
+				"timeout", timeout,
+			)
 
 		case events.RequestEvent:
 			logger.Info("starting API call")
