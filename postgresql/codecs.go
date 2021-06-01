@@ -59,6 +59,7 @@ func (codec *configurationEventCodec) Serialize(ev events.Event) (pgtype.JSONB, 
 	err := res.Set(
 		dataRecord{
 			"retries": event.Retries,
+			"timeout": event.Timeout,
 		},
 	)
 	if err != nil {
@@ -73,6 +74,7 @@ func (codec *configurationEventCodec) Deserialize(data pgtype.JSONB) (events.Eve
 	err := data.AssignTo(&tmp)
 	res := events.ConfigurationEvent{
 		Retries: (int32)(tmp["retries"].(float64)),
+		Timeout: tmp["timeout"].(float64),
 	}
 	return res, err
 }

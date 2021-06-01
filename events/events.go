@@ -26,7 +26,8 @@ func (e SimpleEvent) Class() string {
 // ConfigurationEvent models an event that contains configuration settings
 // for the way the API is used.
 type ConfigurationEvent struct {
-	Retries int32 // number of retries after a failure
+	Retries int32   // number of retries after a failure
+	Timeout float64 // timeout for each attempt
 }
 
 // Class implements the Event interface.
