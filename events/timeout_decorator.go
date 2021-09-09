@@ -46,9 +46,45 @@ func (d *EventStoreTimeoutDecorator) Close() error {
 	return d.store.Close()
 }
 
-// Insert implements the EventStore interface by simply forwarding.
+// Insert implements the EventStore interface.
 func (d *EventStoreTimeoutDecorator) Insert(ctx context.Context, event Event, causationID int32) (Envelope, error) {
-	return d.store.Insert(ctx, event, causationID)
+	// forward call to the decorated event store first
+	env, err := d.store.Insert(ctx, event, causationID)
+	if err != nil {
+		return env, err
+	}
+
+	// if no timeout is configured, do nothing
+	if d.timeout == nil {
+		return env, err
+	}
+
+	// ignore all but API request events
+	request, ok := env.Event().(APIRequestEvent)
+	if !ok {
+		return env, err
+	}
+
+	// trigger async creation of a timeout event
+	// TODO: this accesses d.store asynchronously, which may need synchronization
+	time.AfterFunc(
+		*d.timeout,
+		func() {
+			_, err := d.store.Insert(
+				ctx,
+				APITimeoutEvent{
+					Attempt: request.Attempt,
+				},
+				causationID,
+			)
+			if err != nil {
+				d.logger.Error("timeout-decorator: failed to insert timeout event", "error", err)
+			}
+		},
+	)
+
+	// return result of inserting the initial event
+	return env, err
 }
 
 // RetrieveOne implements the EventStore interface by simply forwarding.
