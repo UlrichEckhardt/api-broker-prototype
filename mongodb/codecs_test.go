@@ -228,3 +228,22 @@ func TestAPIFailureCodec(t *testing.T) {
 		runTestcase(name, c, codec, t)
 	}
 }
+
+func TestAPITimeoutCodec(t *testing.T) {
+	var codec MongoDBEventCodec = &apiTimeoutEventCodec{}
+
+	cases := map[string]testcase{
+		"test timeout": {
+			event: events.APITimeoutEvent{
+				Attempt: uint(0),
+			},
+			data: bson.M{
+				"attempt": int64(0),
+			},
+		},
+	}
+
+	for name, c := range cases {
+		runTestcase(name, c, codec, t)
+	}
+}
