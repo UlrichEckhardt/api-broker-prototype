@@ -12,7 +12,7 @@ services:
   mongodb:
     image: mongo:4.2
     healthcheck:
-      test: ["CMD", "mongo", "--eval", "show logs"]
+      test: ["CMD", "mongo", "--eval", "db.help()"]
       interval: 30s
       timeout: 2s
       retries: 1
