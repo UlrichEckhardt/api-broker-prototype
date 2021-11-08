@@ -55,18 +55,18 @@ It uses ideas prevalent in Domain Driven Design, namely Event Sourcing and CQRS,
 ## Running things using docker-compose
 
  - Start the setup using `docker-compose up --build --detach`.
- - Configure the broker using e.g. `docker-compose broker configure --retries 2`.
+ - Configure the broker using e.g. `docker-compose run broker configure --retries 2`.
    In addition to configuring the broker, it creates an event in the MongoDB
    collection. This is necessary, because you can't wait on an empty capped
    collection. This is a bug (IMHO) in MongoDB and some people even reported
    it as such.
- - Start the event processor using `docker-compose broker process`. You can
+ - Start the event processor using `docker-compose run broker process`. You can
    adjust the simulated behaviour of the API using various parameters there.
    This will keep running in the foreground.
- - In order to simulate a call, `docker-compose broker insert request "test"`.
+ - In order to simulate a call, `docker-compose run broker insert request "test"`.
  - You should now be able to see the event processor simulating an API call,
    storing the resulting info in the event store.
- - Using `./api-broker-prototype list`, you can get a list of all events and
+ - Using `docker-compose run broker list`, you can get a list of all events and
    their contents.
  - Finally, you can kill the event processor and shut down the whole setup
    using `docker-compose rm --stop --force`.
