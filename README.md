@@ -85,6 +85,19 @@ correct host for the DB, using
 Since the setup uses the "host" network, you can also use "localhost", which
 is also the default.
 
+## Configuring using overrides with docker-compose
+
+You can create a file docker-compose.override.yml which is automatically used
+as overlay for for the existing setup. You can use that to e.g. switch the
+used eventstore and DB host:
+```yaml
+services:
+  broker:
+    environment:
+      - EVENTSTORE_DRIVER=postgresql
+      - EVENTSTORE_DB_HOST=postgresql
+```
+
 # Diagnostics
 You can use
 * Commandline flag `--eventstore-loglevel debug|info|warn|error|crit`
