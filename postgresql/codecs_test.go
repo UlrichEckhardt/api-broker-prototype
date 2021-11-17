@@ -172,3 +172,20 @@ func TestAPIFailureCodec(t *testing.T) {
 		runSuccessCase(name, c, codec, t)
 	}
 }
+
+func TestAPITimeoutCodec(t *testing.T) {
+	var codec PostgreSQLEventCodec = &apiTimeoutEventCodec{}
+
+	cases := map[string]successCase{
+		"test timeout": {
+			event: events.APITimeoutEvent{
+				Attempt: uint(0),
+			},
+			data: `{"attempt":0}`,
+		},
+	}
+
+	for name, c := range cases {
+		runSuccessCase(name, c, codec, t)
+	}
+}

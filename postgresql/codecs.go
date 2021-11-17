@@ -210,3 +210,35 @@ func (codec *apiFailureEventCodec) Deserialize(data pgtype.JSONB) (events.Event,
 	}
 	return res, err
 }
+
+type apiTimeoutEventCodec struct{}
+
+// Class implements the PostgreSQLEventCodec interface.
+func (codec *apiTimeoutEventCodec) Class() string {
+	return "api-timeout"
+}
+
+// Serialize implements the PostgreSQLEventCodec interface.
+func (codec *apiTimeoutEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
+	event := ev.(events.APITimeoutEvent)
+	res := pgtype.JSONB{}
+	err := res.Set(
+		dataRecord{
+			"attempt": event.Attempt,
+		},
+	)
+	if err != nil {
+		return pgtype.JSONB{}, err
+	}
+	return res, nil
+}
+
+// Deserialize implements the PostgreSQLEventCodec interface.
+func (codec *apiTimeoutEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
+	tmp := dataRecord{}
+	err := data.AssignTo(&tmp)
+	res := events.APITimeoutEvent{
+		Attempt: (uint)(tmp["attempt"].(float64)),
+	}
+	return res, err
+}
