@@ -99,6 +99,8 @@ func runTestcase(name string, c testcase, codec MongoDBEventCodec, t *testing.T)
 }
 
 func TestSimpleCodec(t *testing.T) {
+	var codec MongoDBEventCodec = &simpleEventCodec{}
+
 	cases := map[string]testcase{
 		"test 1": {
 			event: events.SimpleEvent{},
@@ -116,13 +118,14 @@ func TestSimpleCodec(t *testing.T) {
 		},
 	}
 
-	var codec SimpleEventCodec
 	for name, c := range cases {
-		runTestcase(name, c, &codec, t)
+		runTestcase(name, c, codec, t)
 	}
 }
 
 func TestConfigurationCodec(t *testing.T) {
+	var codec MongoDBEventCodec = &configurationEventCodec{}
+
 	cases := map[string]testcase{
 		"test configuration": {
 			event: events.ConfigurationEvent{
@@ -136,13 +139,14 @@ func TestConfigurationCodec(t *testing.T) {
 		},
 	}
 
-	var codec ConfigurationEventCodec
 	for name, c := range cases {
-		runTestcase(name, c, &codec, t)
+		runTestcase(name, c, codec, t)
 	}
 }
 
 func TestRequestCodec(t *testing.T) {
+	var codec MongoDBEventCodec = &requestEventCodec{}
+
 	cases := map[string]testcase{
 		"test request": {
 			event: events.RequestEvent{
@@ -154,13 +158,14 @@ func TestRequestCodec(t *testing.T) {
 		},
 	}
 
-	var codec RequestEventCodec
 	for name, c := range cases {
-		runTestcase(name, c, &codec, t)
+		runTestcase(name, c, codec, t)
 	}
 }
 
 func TestResponseCodec(t *testing.T) {
+	var codec MongoDBEventCodec = &responseEventCodec{}
+
 	cases := map[string]testcase{
 		"test response": {
 			event: events.ResponseEvent{
@@ -174,13 +179,14 @@ func TestResponseCodec(t *testing.T) {
 		},
 	}
 
-	var codec ResponseEventCodec
 	for name, c := range cases {
-		runTestcase(name, c, &codec, t)
+		runTestcase(name, c, codec, t)
 	}
 }
 
 func TestFailureCodec(t *testing.T) {
+	var codec MongoDBEventCodec = &failureEventCodec{}
+
 	cases := map[string]testcase{
 		"test failure": {
 			event: events.FailureEvent{
@@ -194,8 +200,7 @@ func TestFailureCodec(t *testing.T) {
 		},
 	}
 
-	var codec FailureEventCodec
 	for name, c := range cases {
-		runTestcase(name, c, &codec, t)
+		runTestcase(name, c, codec, t)
 	}
 }
