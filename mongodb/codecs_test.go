@@ -116,7 +116,7 @@ func TestSimpleCodec(t *testing.T) {
 		},
 	}
 
-	var codec SimpleEventCodec
+	var codec simpleEventCodec
 	for name, c := range cases {
 		runTestcase(name, c, &codec, t)
 	}
@@ -136,7 +136,7 @@ func TestConfigurationCodec(t *testing.T) {
 		},
 	}
 
-	var codec ConfigurationEventCodec
+	var codec configurationEventCodec
 	for name, c := range cases {
 		runTestcase(name, c, &codec, t)
 	}
@@ -154,7 +154,7 @@ func TestRequestCodec(t *testing.T) {
 		},
 	}
 
-	var codec RequestEventCodec
+	var codec requestEventCodec
 	for name, c := range cases {
 		runTestcase(name, c, &codec, t)
 	}
@@ -174,7 +174,7 @@ func TestResponseCodec(t *testing.T) {
 		},
 	}
 
-	var codec ResponseEventCodec
+	var codec responseEventCodec
 	for name, c := range cases {
 		runTestcase(name, c, &codec, t)
 	}
@@ -194,7 +194,7 @@ func TestFailureCodec(t *testing.T) {
 		},
 	}
 
-	var codec FailureEventCodec
+	var codec failureEventCodec
 	for name, c := range cases {
 		runTestcase(name, c, &codec, t)
 	}

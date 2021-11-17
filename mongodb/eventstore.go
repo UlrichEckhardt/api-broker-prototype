@@ -146,11 +146,11 @@ func NewEventStore(host string) (*MongoDBEventStore, error) {
 	s.notifications = notifications
 
 	// register codecs
-	s.RegisterCodec(&ConfigurationEventCodec{})
-	s.RegisterCodec(&SimpleEventCodec{})
-	s.RegisterCodec(&RequestEventCodec{})
-	s.RegisterCodec(&ResponseEventCodec{})
-	s.RegisterCodec(&FailureEventCodec{})
+	s.RegisterCodec(&configurationEventCodec{})
+	s.RegisterCodec(&simpleEventCodec{})
+	s.RegisterCodec(&requestEventCodec{})
+	s.RegisterCodec(&responseEventCodec{})
+	s.RegisterCodec(&failureEventCodec{})
 
 	return &s, nil
 }
