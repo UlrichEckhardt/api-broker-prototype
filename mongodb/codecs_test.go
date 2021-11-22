@@ -168,12 +168,12 @@ func TestRequestCodec(t *testing.T) {
 	}
 }
 
-func TestResponseCodec(t *testing.T) {
-	var codec MongoDBEventCodec = &responseEventCodec{}
+func TestAPIResponseCodec(t *testing.T) {
+	var codec MongoDBEventCodec = &apiResponseEventCodec{}
 
 	cases := map[string]testcase{
 		"test response": {
-			event: events.ResponseEvent{
+			event: events.APIResponseEvent{
 				Attempt:  uint(0),
 				Response: "some response",
 			},
@@ -189,12 +189,12 @@ func TestResponseCodec(t *testing.T) {
 	}
 }
 
-func TestFailureCodec(t *testing.T) {
-	var codec MongoDBEventCodec = &failureEventCodec{}
+func TestAPIFailureCodec(t *testing.T) {
+	var codec MongoDBEventCodec = &apiFailureEventCodec{}
 
 	cases := map[string]testcase{
 		"test failure": {
-			event: events.FailureEvent{
+			event: events.APIFailureEvent{
 				Attempt: uint(0),
 				Failure: "some failure",
 			},

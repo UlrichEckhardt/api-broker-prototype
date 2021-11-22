@@ -111,16 +111,16 @@ func (codec *requestEventCodec) Deserialize(data pgtype.JSONB) (events.Event, er
 	return res, err
 }
 
-type responseEventCodec struct{}
+type apiResponseEventCodec struct{}
 
 // Class implements the PostgreSQLEventCodec interface.
-func (codec *responseEventCodec) Class() string {
-	return "response"
+func (codec *apiResponseEventCodec) Class() string {
+	return "api-response"
 }
 
 // Serialize implements the PostgreSQLEventCodec interface.
-func (codec *responseEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
-	event := ev.(events.ResponseEvent)
+func (codec *apiResponseEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
+	event := ev.(events.APIResponseEvent)
 	res := pgtype.JSONB{}
 	err := res.Set(
 		dataRecord{
@@ -135,26 +135,26 @@ func (codec *responseEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error
 }
 
 // Deserialize implements the PostgreSQLEventCodec interface.
-func (codec *responseEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
+func (codec *apiResponseEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
 	tmp := dataRecord{}
 	err := data.AssignTo(&tmp)
-	res := events.ResponseEvent{
+	res := events.APIResponseEvent{
 		Attempt:  (uint)(tmp["attempt"].(float64)),
 		Response: tmp["response"].(string),
 	}
 	return res, err
 }
 
-type failureEventCodec struct{}
+type apiFailureEventCodec struct{}
 
 // Class implements the PostgreSQLEventCodec interface.
-func (codec *failureEventCodec) Class() string {
-	return "failure"
+func (codec *apiFailureEventCodec) Class() string {
+	return "api-failure"
 }
 
 // Serialize implements the PostgreSQLEventCodec interface.
-func (codec *failureEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
-	event := ev.(events.FailureEvent)
+func (codec *apiFailureEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
+	event := ev.(events.APIFailureEvent)
 	res := pgtype.JSONB{}
 	err := res.Set(
 		dataRecord{
@@ -169,10 +169,10 @@ func (codec *failureEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error)
 }
 
 // Deserialize implements the PostgreSQLEventCodec interface.
-func (codec *failureEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
+func (codec *apiFailureEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
 	tmp := dataRecord{}
 	err := data.AssignTo(&tmp)
-	res := events.FailureEvent{
+	res := events.APIFailureEvent{
 		Attempt: (uint)(tmp["attempt"].(float64)),
 		Failure: tmp["failure"].(string),
 	}

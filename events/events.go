@@ -45,28 +45,29 @@ func (e RequestEvent) Class() string {
 	return "request"
 }
 
-// the ResponseEvent represents a response received from the API
+// the APIResponseEvent represents a response received from the API
 // Note that this does not discriminate between success or failure. Rather,
-// any response is stored here.
-type ResponseEvent struct {
+// any response is stored here without interpretation.
+type APIResponseEvent struct {
 	Attempt  uint // zero-based index of the attempt
 	Response string
 }
 
 // Class implements the Event interface.
-func (e ResponseEvent) Class() string {
-	return "response"
+func (e APIResponseEvent) Class() string {
+	return "api-response"
 }
 
-// the FailureEvent represents a failure while trying to send a request to the API
+// the APIFailureEvent represents a failure while trying to send a request to the API
 // By its very nature, these kinds of failure are generated locally, like e.g.
-// the failure to resolve a remote name.
-type FailureEvent struct {
+// the failure to resolve the remote DNS name to an IP. It does not represent a
+// response received from remote which contains an error.
+type APIFailureEvent struct {
 	Attempt uint // zero-based index of the attempt
 	Failure string
 }
 
 // Class implements the Event interface.
-func (e FailureEvent) Class() string {
-	return "failure"
+func (e APIFailureEvent) Class() string {
+	return "api-failure"
 }

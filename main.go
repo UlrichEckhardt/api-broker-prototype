@@ -288,9 +288,9 @@ func insertMain(class string, data string, causation string) error {
 	case "request":
 		event = events.RequestEvent{Request: data}
 	case "response":
-		event = events.ResponseEvent{Response: data}
+		event = events.APIResponseEvent{Response: data}
 	case "failure":
-		event = events.FailureEvent{Failure: data}
+		event = events.APIFailureEvent{Failure: data}
 	default:
 		return errors.New("unrecognized event class")
 	}
@@ -360,7 +360,7 @@ func callAPI(ctx context.Context, store events.EventStore, event events.RequestE
 	if response != nil {
 		store.Insert(
 			ctx,
-			events.ResponseEvent{
+			events.APIResponseEvent{
 				Attempt:  attempt,
 				Response: *response,
 			},
@@ -369,7 +369,7 @@ func callAPI(ctx context.Context, store events.EventStore, event events.RequestE
 	} else if err != nil {
 		store.Insert(
 			ctx,
-			events.FailureEvent{
+			events.APIFailureEvent{
 				Attempt: attempt,
 				Failure: err.Error(),
 			},
@@ -465,7 +465,7 @@ func processMain(lastProcessed string) error {
 			go callAPI(ctx, store, event, envelope.ID(), call.attempts)
 			call.attempts++
 
-		case events.ResponseEvent:
+		case events.APIResponseEvent:
 			// fetch the request event
 			requestID := envelope.CausationID()
 			if requestID == 0 {
@@ -481,7 +481,7 @@ func processMain(lastProcessed string) error {
 			delete(calls, requestID)
 			logger.Info("completed API call")
 
-		case events.FailureEvent:
+		case events.APIFailureEvent:
 			// fetch the request event
 			requestID := envelope.CausationID()
 			if requestID == 0 {
@@ -614,7 +614,7 @@ func watchRequestsMain(startAfter string) error {
 				"summary", summary(state),
 			)
 
-		case events.ResponseEvent:
+		case events.APIResponseEvent:
 			state := requests[envelope.CausationID()]
 			state.attempts[event.Attempt] = "success"
 
@@ -625,7 +625,7 @@ func watchRequestsMain(startAfter string) error {
 				"attempt", event.Attempt,
 			)
 
-		case events.FailureEvent:
+		case events.APIFailureEvent:
 			state := requests[envelope.CausationID()]
 			state.attempts[event.Attempt] = "failed"
 
