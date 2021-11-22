@@ -161,6 +161,25 @@ func main() {
 					return watchNotificationsMain()
 				},
 			},
+			{
+				Name:      "watch-requests",
+				Usage:     "Watch requests as they are processed.",
+				ArgsUsage: " ", // no arguments expected
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "start-after",
+						Value: "",
+						Usage: "`ID` of the event after which to start watching",
+					},
+				},
+				Action: func(c *cli.Context) error {
+					if c.NArg() > 0 {
+						return errors.New("no arguments expected")
+					}
+
+					return watchRequestsMain(c.String("start-after"))
+				},
+			},
 		},
 	}
 
@@ -501,6 +520,114 @@ func watchNotificationsMain() error {
 	// process notifications from the channel
 	for notification := range ch {
 		logger.Info("received notification", "id", notification.ID())
+	}
+
+	return store.Error()
+}
+
+// watch requests as they are processed
+func watchRequestsMain(startAfter string) error {
+	if err := initEventStore(); err != nil {
+		return err
+	}
+	defer finalizeEventStore()
+
+	// parse optional event ID
+	var startAfterID int32
+	if startAfter != "" {
+		id, err := store.ParseEventID(startAfter)
+		if err != nil {
+			return err
+		}
+		startAfterID = id
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch, err := store.FollowEvents(ctx, startAfterID)
+	if err != nil {
+		return err
+	}
+
+	// state of request being processed
+	type requestState struct {
+		retries  uint
+		attempts map[uint]string
+	}
+
+	// extract summary from request state
+	// pending: API is being queried
+	// success: response received
+	// failure: request failed
+	summary := func(state *requestState) string {
+		// the default value is pending, which means no actual requests have been made
+		res := "pending"
+
+		for i, attempt := range state.attempts {
+			res = attempt
+			if res == "success" {
+				// first successful response makes the whole request successful
+				break
+			}
+			if i < state.retries {
+				// if there are still some attempts left, the overall result is still pending
+				res = "pending"
+			}
+		}
+		return res
+	}
+
+	// map with request states
+	requests := make(map[int32]*requestState)
+
+	// number of retries after a failed request
+	retries := uint(0)
+
+	// process events from the channel
+	for envelope := range ch {
+
+		switch event := envelope.Event().(type) {
+		case events.ConfigurationEvent:
+			if event.Retries >= 0 {
+				retries = uint(event.Retries)
+			}
+
+		case events.RequestEvent:
+			// create record to correlate the results with it
+			state := &requestState{
+				retries:  retries,
+				attempts: make(map[uint]string),
+			}
+			requests[envelope.ID()] = state
+			logger.Info(
+				"request received",
+				"request ID", envelope.ID(),
+				"summary", summary(state),
+			)
+
+		case events.ResponseEvent:
+			state := requests[envelope.CausationID()]
+			state.attempts[event.Attempt] = "success"
+
+			logger.Info(
+				"API request succeeded",
+				"request ID", envelope.CausationID(),
+				"summary", summary(state),
+				"attempt", event.Attempt,
+			)
+
+		case events.FailureEvent:
+			state := requests[envelope.CausationID()]
+			state.attempts[event.Attempt] = "failed"
+
+			logger.Info(
+				"API request failed",
+				"request ID", envelope.CausationID(),
+				"summary", summary(state),
+				"attempt", event.Attempt,
+			)
+		}
 	}
 
 	return store.Error()
