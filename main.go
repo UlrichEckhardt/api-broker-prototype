@@ -116,7 +116,7 @@ func main() {
 			},
 			{
 				Name:      "process",
-				Usage:     "process events from the store",
+				Usage:     "Process events from the store.",
 				ArgsUsage: " ", // no arguments expected
 				Flags: []cli.Flag{
 					&cli.Float64Flag{
@@ -151,14 +151,14 @@ func main() {
 			},
 			{
 				Name:      "watch",
-				Usage:     "process notifications from the store",
+				Usage:     "Watch notifications from the store.",
 				ArgsUsage: " ", // no arguments expected
 				Action: func(c *cli.Context) error {
 					if c.NArg() > 0 {
 						return errors.New("no arguments expected")
 					}
 
-					return watchMain()
+					return watchNotificationsMain()
 				},
 			},
 		},
@@ -484,7 +484,7 @@ func processMain(lastProcessed string) error {
 }
 
 // watch stream of notifications
-func watchMain() error {
+func watchNotificationsMain() error {
 	if err := initEventStore(); err != nil {
 		return err
 	}
