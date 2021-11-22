@@ -149,6 +149,7 @@ func NewEventStore(host string) (*MongoDBEventStore, error) {
 	s.RegisterCodec(&configurationEventCodec{})
 	s.RegisterCodec(&simpleEventCodec{})
 	s.RegisterCodec(&requestEventCodec{})
+	s.RegisterCodec(&apiRequestEventCodec{})
 	s.RegisterCodec(&apiResponseEventCodec{})
 	s.RegisterCodec(&apiFailureEventCodec{})
 

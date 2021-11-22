@@ -111,6 +111,38 @@ func (codec *requestEventCodec) Deserialize(data pgtype.JSONB) (events.Event, er
 	return res, err
 }
 
+type apiRequestEventCodec struct{}
+
+// Class implements the PostgreSQLEventCodec interface.
+func (codec *apiRequestEventCodec) Class() string {
+	return "api-request"
+}
+
+// Serialize implements the PostgreSQLEventCodec interface.
+func (codec *apiRequestEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
+	event := ev.(events.APIRequestEvent)
+	res := pgtype.JSONB{}
+	err := res.Set(
+		dataRecord{
+			"attempt":  event.Attempt,
+		},
+	)
+	if err != nil {
+		return pgtype.JSONB{}, err
+	}
+	return res, nil
+}
+
+// Deserialize implements the PostgreSQLEventCodec interface.
+func (codec *apiRequestEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
+	tmp := dataRecord{}
+	err := data.AssignTo(&tmp)
+	res := events.APIRequestEvent{
+		Attempt:  (uint)(tmp["attempt"].(float64)),
+	}
+	return res, err
+}
+
 type apiResponseEventCodec struct{}
 
 // Class implements the PostgreSQLEventCodec interface.

@@ -168,6 +168,25 @@ func TestRequestCodec(t *testing.T) {
 	}
 }
 
+func TestAPIRequestCodec(t *testing.T) {
+	var codec MongoDBEventCodec = &apiRequestEventCodec{}
+
+	cases := map[string]testcase{
+		"test request": {
+			event: events.APIRequestEvent{
+				Attempt:  uint(0),
+			},
+			data: bson.M{
+				"attempt":  int64(0),
+			},
+		},
+	}
+
+	for name, c := range cases {
+		runTestcase(name, c, codec, t)
+	}
+}
+
 func TestAPIResponseCodec(t *testing.T) {
 	var codec MongoDBEventCodec = &apiResponseEventCodec{}
 
