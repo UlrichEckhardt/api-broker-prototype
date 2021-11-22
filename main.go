@@ -353,6 +353,15 @@ func listMain(lastProcessed string) error {
 
 // utility function to invoke the API and store the result as event
 func callAPI(ctx context.Context, store events.EventStore, event events.RequestEvent, causationID int32, attempt uint) {
+	// emit event that a request was started
+	store.Insert(
+		ctx,
+		events.APIRequestEvent{
+			Attempt: attempt,
+		},
+		causationID,
+	)
+
 	// delegate to API stub
 	response, err := ProcessRequest(event.Request)
 
@@ -452,7 +461,7 @@ func processMain(lastProcessed string) error {
 			)
 
 		case events.RequestEvent:
-			logger.Info("starting API call")
+			logger.Info("starting request processing")
 
 			// create record to correlate the results with it
 			call := &requestState{
@@ -464,6 +473,12 @@ func processMain(lastProcessed string) error {
 			// try event processing asynchronously
 			go callAPI(ctx, store, event, envelope.ID(), call.attempts)
 			call.attempts++
+
+		case events.APIRequestEvent:
+			logger.Info(
+				"starting API call",
+				"attempt", event.Attempt,
+			)
 
 		case events.APIResponseEvent:
 			// fetch the request event
@@ -612,6 +627,17 @@ func watchRequestsMain(startAfter string) error {
 				"request received",
 				"request ID", envelope.ID(),
 				"summary", summary(state),
+			)
+
+		case events.APIRequestEvent:
+			state := requests[envelope.CausationID()]
+			state.attempts[event.Attempt] = "pending"
+
+			logger.Info(
+				"API request starting",
+				"request ID", envelope.CausationID(),
+				"summary", summary(state),
+				"attempt", event.Attempt,
 			)
 
 		case events.APIResponseEvent:
