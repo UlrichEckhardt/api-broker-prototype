@@ -14,6 +14,11 @@ type testcase struct {
 }
 
 func runTestcase(name string, c testcase, codec MongoDBEventCodec, t *testing.T) {
+	if codec.Class() != c.event.Class() {
+		t.Error("codec/event class mismatch")
+		return
+	}
+
 	if c.data != nil {
 		// test deserializing
 		t.Run(name, func(t *testing.T) {
