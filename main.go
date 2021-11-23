@@ -392,6 +392,30 @@ func startApiCall(ctx context.Context, store events.EventStore, event events.Req
 	}()
 }
 
+// state representing the state a request is in
+// This is applied both to the initial request from the client and the single
+// requests made to the API.
+type requestState int
+
+const (
+	state_pending requestState = iota
+	state_success
+	state_failure
+)
+
+func (d requestState) String() string {
+	switch d {
+	case state_pending:
+		return "pending"
+	case state_success:
+		return "success"
+	case state_failure:
+		return "failure"
+	default:
+		return ""
+	}
+}
+
 // process existing elements
 func processMain(lastProcessed string) error {
 	store, err := initEventStore()
@@ -425,12 +449,12 @@ func processMain(lastProcessed string) error {
 
 	// map of requests being processed currently
 	// This combines the request data and metadata used for processing it.
-	type requestState struct {
+	type requestData struct {
 		request     events.Envelope
 		maxAttempts uint
 		attempts    uint
 	}
-	calls := make(map[int32]*requestState)
+	calls := make(map[int32]*requestData)
 
 	// process events from the channel
 	for envelope := range ch {
@@ -468,7 +492,7 @@ func processMain(lastProcessed string) error {
 			logger.Info("starting request processing")
 
 			// create record to correlate the results with it
-			call := &requestState{
+			call := &requestData{
 				request:     envelope,
 				maxAttempts: 1 + retries,
 			}
@@ -580,41 +604,52 @@ func watchRequestsMain(startAfter string) error {
 	}
 
 	// state of request being processed
-	type requestState struct {
+	type requestData struct {
 		retries  uint
-		attempts map[uint]string
+		attempts map[uint]requestState
 	}
 
 	// extract summary from request state
 	// pending: API is being queried
 	// success: response received
 	// failure: request failed
-	summary := func(state *requestState) string {
+	summary := func(state *requestData) requestState {
 		// the default value is pending, which means no actual requests have been made
-		res := "pending"
+		res := state_pending
 
 		for i, attempt := range state.attempts {
 			res = attempt
-			if res == "success" {
+			if res == state_success {
 				// first successful response makes the whole request successful
 				break
 			}
 			if i < state.retries {
 				// if there are still some attempts left, the overall result is still pending
-				res = "pending"
+				res = state_pending
 			}
 		}
 		return res
 	}
 
 	// map with request states
-	requests := make(map[int32]*requestState)
+	requests := make(map[int32]*requestData)
 
 	// number of retries after a failed request
 	retries := uint(0)
 
 	// process events from the channel
 	for envelope := range ch {
+
+		var state *requestData
+		if envelope.CausationID() == 0 {
+			state = &requestData{
+				retries:  retries,
+				attempts: make(map[uint]requestState),
+			}
+			requests[envelope.ID()] = state
+		} else {
+			state = requests[envelope.CausationID()]
+		}
 
 		switch event := envelope.Event().(type) {
 		case events.ConfigurationEvent:
@@ -624,11 +659,6 @@ func watchRequestsMain(startAfter string) error {
 
 		case events.RequestEvent:
 			// create record to correlate the results with it
-			state := &requestState{
-				retries:  retries,
-				attempts: make(map[uint]string),
-			}
-			requests[envelope.ID()] = state
 			logger.Info(
 				"request received",
 				"request ID", envelope.ID(),
@@ -636,8 +666,7 @@ func watchRequestsMain(startAfter string) error {
 			)
 
 		case events.APIRequestEvent:
-			state := requests[envelope.CausationID()]
-			state.attempts[event.Attempt] = "pending"
+			state.attempts[event.Attempt] = state_pending
 
 			logger.Info(
 				"API request starting",
@@ -647,8 +676,7 @@ func watchRequestsMain(startAfter string) error {
 			)
 
 		case events.APIResponseEvent:
-			state := requests[envelope.CausationID()]
-			state.attempts[event.Attempt] = "success"
+			state.attempts[event.Attempt] = state_success
 
 			logger.Info(
 				"API request succeeded",
@@ -658,8 +686,7 @@ func watchRequestsMain(startAfter string) error {
 			)
 
 		case events.APIFailureEvent:
-			state := requests[envelope.CausationID()]
-			state.attempts[event.Attempt] = "failed"
+			state.attempts[event.Attempt] = state_failure
 
 			logger.Info(
 				"API request failed",
