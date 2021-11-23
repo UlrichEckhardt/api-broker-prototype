@@ -352,7 +352,7 @@ func listMain(lastProcessed string) error {
 }
 
 // utility function to invoke the API and store the result as event
-func callAPI(ctx context.Context, store events.EventStore, event events.RequestEvent, causationID int32, attempt uint) {
+func startApiCall(ctx context.Context, store events.EventStore, event events.RequestEvent, causationID int32, attempt uint) {
 	// emit event that a request was started
 	store.Insert(
 		ctx,
@@ -362,31 +362,34 @@ func callAPI(ctx context.Context, store events.EventStore, event events.RequestE
 		causationID,
 	)
 
-	// delegate to API stub
-	response, err := ProcessRequest(event.Request)
+	// TODO: this accesses `store` asynchronously, which may need synchronization
+	go func() {
+		// delegate to API stub
+		response, err := ProcessRequest(event.Request)
 
-	// store results as event
-	if response != nil {
-		store.Insert(
-			ctx,
-			events.APIResponseEvent{
-				Attempt:  attempt,
-				Response: *response,
-			},
-			causationID,
-		)
-	} else if err != nil {
-		store.Insert(
-			ctx,
-			events.APIFailureEvent{
-				Attempt: attempt,
-				Failure: err.Error(),
-			},
-			causationID,
-		)
-	} else {
-		logger.Info("No response from API.")
-	}
+		// store results as event
+		if response != nil {
+			store.Insert(
+				ctx,
+				events.APIResponseEvent{
+					Attempt:  attempt,
+					Response: *response,
+				},
+				causationID,
+			)
+		} else if err != nil {
+			store.Insert(
+				ctx,
+				events.APIFailureEvent{
+					Attempt: attempt,
+					Failure: err.Error(),
+				},
+				causationID,
+			)
+		} else {
+			logger.Info("No response from API.")
+		}
+	}()
 }
 
 // process existing elements
@@ -471,7 +474,7 @@ func processMain(lastProcessed string) error {
 			calls[envelope.ID()] = call
 
 			// try event processing asynchronously
-			go callAPI(ctx, store, event, envelope.ID(), call.attempts)
+			startApiCall(ctx, store, event, envelope.ID(), call.attempts)
 			call.attempts++
 
 		case events.APIRequestEvent:
@@ -517,7 +520,7 @@ func processMain(lastProcessed string) error {
 			}
 
 			// retry event processing asynchronously
-			go callAPI(ctx, store, call.request.Event().(events.RequestEvent), call.request.ID(), call.attempts)
+			startApiCall(ctx, store, call.request.Event().(events.RequestEvent), call.request.ID(), call.attempts)
 			call.attempts++
 		}
 	}
