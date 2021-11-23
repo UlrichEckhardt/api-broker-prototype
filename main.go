@@ -18,7 +18,6 @@ var (
 	eventStoreDBHost   string
 	eventStoreLoglevel string
 	logger             log15.Logger
-	store              events.EventStore
 )
 
 func main() {
@@ -204,7 +203,7 @@ func configureAPIStub(c *cli.Context) {
 	)
 }
 
-func initEventStore() error {
+func initEventStore() (events.EventStore, error) {
 	loglevel, err := log15.LvlFromString(eventStoreLoglevel)
 	// setup log handler
 	handler := log15.LvlFilterHandler(loglevel, logger.GetHandler())
@@ -214,33 +213,31 @@ func initEventStore() error {
 	esLogger.SetHandler(handler)
 
 	// create an event store facade
-	var s events.EventStore
+	var store events.EventStore
 	switch eventStoreDriver {
 	case "mongodb":
-		s, err = mongodb.NewEventStore(eventStoreDBHost)
+		store, err = mongodb.NewEventStore(eventStoreDBHost)
 	case "postgresql":
-		s, err = postgresql.NewEventStore(eventStoreDBHost)
+		store, err = postgresql.NewEventStore(eventStoreDBHost)
 	default:
 		err = errors.New("invalid driver selected")
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// add a logging decorator in front
-	s, err = logging.NewLoggingDecorator(s, esLogger)
+	store, err = logging.NewLoggingDecorator(store, esLogger)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	store = s
 
 	logger.Info("initialized event store", "host", eventStoreDBHost)
 
-	return nil
+	return store, nil
 }
 
-func finalizeEventStore() {
+func finalizeEventStore(store events.EventStore) {
 	if err := store.Close(); err != nil {
 		logger.Error("failed to close event store", "error", err)
 	}
@@ -248,10 +245,11 @@ func finalizeEventStore() {
 
 // insert a configuration event
 func configureMain(retries int, timeout float64) error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -272,10 +270,11 @@ func configureMain(retries int, timeout float64) error {
 
 // insert a new event
 func insertMain(class string, data string, causation string) error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -313,10 +312,11 @@ func insertMain(class string, data string, causation string) error {
 
 // list existing elements
 func listMain(lastProcessed string) error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	// parse optional event ID
 	var lastProcessedID int32
@@ -394,10 +394,11 @@ func startApiCall(ctx context.Context, store events.EventStore, event events.Req
 
 // process existing elements
 func processMain(lastProcessed string) error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	// parse optional event ID
 	var lastProcessedID int32
@@ -530,10 +531,11 @@ func processMain(lastProcessed string) error {
 
 // watch stream of notifications
 func watchNotificationsMain() error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -553,10 +555,11 @@ func watchNotificationsMain() error {
 
 // watch requests as they are processed
 func watchRequestsMain(startAfter string) error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	// parse optional event ID
 	var startAfterID int32
