@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"github.com/inconshreveable/log15"
+	"time"
 )
 
 // EventStoreTimeoutDecorator wraps an EventStore.
@@ -15,15 +16,17 @@ import (
 // that a response is regularly followed by a timeout. Additionally, you could
 // have a timeout followed by a response as well.
 type EventStoreTimeoutDecorator struct {
-	store  EventStore // decorated event store
-	logger log15.Logger
+	store   EventStore // decorated event store
+	logger  log15.Logger
+	timeout *time.Duration
 }
 
 // NewTimeoutEventStoreDecorator creates a decorator for an event store.
 func NewTimeoutEventStoreDecorator(store EventStore, logger log15.Logger) (*EventStoreTimeoutDecorator, error) {
 	res := &EventStoreTimeoutDecorator{
-		store:  store,
-		logger: logger,
+		store:   store,
+		logger:  logger,
+		timeout: nil,
 	}
 	return res, nil
 }
@@ -63,7 +66,39 @@ func (d *EventStoreTimeoutDecorator) FollowNotifications(ctx context.Context) (<
 	return d.store.FollowNotifications(ctx)
 }
 
-// FollowEvents implements the EventStore interface by simply forwarding.
+// FollowEvents implements the EventStore interface.
 func (d *EventStoreTimeoutDecorator) FollowEvents(ctx context.Context, start int32) (<-chan Envelope, error) {
-	return d.store.FollowEvents(ctx, start)
+	// forward call to the decorated event store first
+	stream, err := d.store.FollowEvents(ctx, start)
+	if err != nil {
+		return stream, err
+	}
+
+	// create intermediate stream to intercept and log the events loaded
+	res := make(chan Envelope)
+	go func() {
+		// close channel on finish
+		defer close(res)
+
+		for env := range stream {
+			config, ok := env.Event().(ConfigurationEvent)
+			if ok {
+				// store the timeout value from the configuration event
+				if config.Timeout > 0 {
+					duration := time.Duration(float64(time.Second) * config.Timeout)
+					d.timeout = &duration
+				} else {
+					d.timeout = nil
+				}
+				d.logger.Info(
+					"timeout-decorator: adjusted timeout",
+					"value", d.timeout,
+				)
+			}
+
+			res <- env
+		}
+	}()
+
+	return res, nil
 }
