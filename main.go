@@ -401,6 +401,7 @@ const (
 	state_pending requestState = iota
 	state_success
 	state_failure
+	state_timeout
 )
 
 func (d requestState) String() string {
@@ -411,6 +412,8 @@ func (d requestState) String() string {
 		return "success"
 	case state_failure:
 		return "failure"
+	case state_timeout:
+		return "timeout"
 	default:
 		return ""
 	}
