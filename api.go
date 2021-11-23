@@ -27,9 +27,9 @@ func ConfigureStub(failureRate float64, silentFailureRate float64, minDuration, 
 }
 
 // ProcessRequest handles a single request. It returns a response string on
-// success or an error on failure. Note that similar to the responseEvent, it
-// doesn't distinguish between an answer that signals success or failure so
-// any error here was caused locally.
+// success or an error on failure. Note that similar to the APIResponseEvent,
+// it doesn't distinguish between an answer that signals success or failure
+// so any error returned was caused locally not received from remote.
 func ProcessRequest(request string) (*string, error) {
 	// add a random delay
 	delay := time.Duration((conf.minDuration + rand.Float64()*(conf.maxDuration-conf.minDuration)) * float64(time.Second))

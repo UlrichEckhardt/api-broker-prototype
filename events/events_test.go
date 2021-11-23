@@ -34,21 +34,31 @@ func TestRequestEvent(t *testing.T) {
 	}
 }
 
-func TestResponseEvent(t *testing.T) {
+func TestAPIRequestEvent(t *testing.T) {
 	// make sure the event implements the event interface
-	var event Event = ResponseEvent{}
+	var event Event = APIRequestEvent{}
 
-	if event.Class() != "response" {
+	if event.Class() != "api-request" {
 		t.Error("unexpected class value")
 		return
 	}
 }
 
-func TestFailureEvent(t *testing.T) {
+func TestAPIResponseEvent(t *testing.T) {
 	// make sure the event implements the event interface
-	var event Event = FailureEvent{}
+	var event Event = APIResponseEvent{}
 
-	if event.Class() != "failure" {
+	if event.Class() != "api-response" {
+		t.Error("unexpected class value")
+		return
+	}
+}
+
+func TestAPIFailureEvent(t *testing.T) {
+	// make sure the event implements the event interface
+	var event Event = APIFailureEvent{}
+
+	if event.Class() != "api-failure" {
 		t.Error("unexpected class value")
 		return
 	}
