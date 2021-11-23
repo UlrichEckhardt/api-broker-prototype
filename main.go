@@ -758,6 +758,32 @@ func watchRequestsMain(startAfter string) error {
 				"summary", summary(request),
 				"attempt", event.Attempt,
 			)
+
+		case events.APITimeoutEvent:
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
+				break
+			}
+
+			// A timeout event can only transition the state from "pending" to
+			// "timeout". Other states like "failure" or "success" are final.
+			if request.attempts[event.Attempt] == state_pending {
+				request.attempts[event.Attempt] = state_timeout
+			}
+
+			logger.Info(
+				"API request timeout elapsed",
+				"request ID", envelope.CausationID(),
+				"summary", summary(request),
+				"attempt", event.Attempt,
+			)
 		}
 	}
 
