@@ -554,8 +554,6 @@ func processMain(lastProcessed string) error {
 
 			// mark request as successful
 			request.attempts[event.Attempt] = state_success
-
-			delete(requests, requestID)
 			logger.Info("completed API call")
 
 		case events.APIFailureEvent:
@@ -577,7 +575,53 @@ func processMain(lastProcessed string) error {
 
 			// check if any retries remain
 			if event.Attempt == request.retries {
-				delete(requests, requestID)
+				logger.Info("retries exhausted")
+				break
+			}
+
+			// If a retry for this unsuccessful attempt was already made, there
+			// is nothing to do here.
+			if event.Attempt+1 < uint(len(request.attempts)) {
+				logger.Info("retry attempt already started")
+				break
+			}
+
+			// retry event processing asynchronously
+			startApiCall(ctx, store, request.request.Event().(events.RequestEvent), request.request.ID(), event.Attempt+1)
+
+		case events.APITimeoutEvent:
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("timeout event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request event")
+				break
+			}
+
+			// A timeout event can only transition the state from "pending" to
+			// "timeout". Other states like "failure" or "success" are final.
+			if request.attempts[event.Attempt] != state_pending {
+				break
+			}
+
+			// mark request as timed out
+			request.attempts[event.Attempt] = state_timeout
+			logger.Info("API call timed out")
+
+			// check if any retries remain
+			if event.Attempt == request.retries {
+				logger.Info("retries exhausted")
+				break
+			}
+
+			// If a retry for this unsuccessful attempt was already made, there
+			// is nothing to do here.
+			if event.Attempt+1 < uint(len(request.attempts)) {
+				logger.Info("retry attempt already started")
 				break
 			}
 
