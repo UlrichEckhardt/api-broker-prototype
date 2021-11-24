@@ -416,6 +416,21 @@ func (d requestState) String() string {
 	}
 }
 
+// metadata for a request
+type requestData struct {
+	request  events.Envelope
+	retries  uint
+	attempts map[uint]requestState
+}
+
+func newRequestData(request events.Envelope, retries uint) *requestData {
+	return &requestData{
+		request:  request,
+		retries:  retries,
+		attempts: make(map[uint]requestState),
+	}
+}
+
 // process existing elements
 func processMain(lastProcessed string) error {
 	store, err := initEventStore()
@@ -448,13 +463,9 @@ func processMain(lastProcessed string) error {
 	timeout := 5 * time.Second
 
 	// map of requests being processed currently
-	// This combines the request data and metadata used for processing it.
-	type requestData struct {
-		request     events.Envelope
-		maxAttempts uint
-		attempts    uint
-	}
-	calls := make(map[int32]*requestData)
+	// Key is the event ID of the initial event (`RequestEvent`), which is
+	// used as causation ID in future events associated with this request.
+	requests := make(map[int32]*requestData)
 
 	// process events from the channel
 	for envelope := range ch {
@@ -492,61 +503,77 @@ func processMain(lastProcessed string) error {
 			logger.Info("starting request processing")
 
 			// create record to correlate the results with it
-			call := &requestData{
-				request:     envelope,
-				maxAttempts: 1 + retries,
-			}
-			calls[envelope.ID()] = call
+			request := newRequestData(envelope, retries)
+			requests[envelope.ID()] = request
 
 			// try event processing asynchronously
-			startApiCall(ctx, store, event, envelope.ID(), call.attempts)
-			call.attempts++
+			startApiCall(ctx, store, event, envelope.ID(), 0)
 
 		case events.APIRequestEvent:
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
+				break
+			}
+
+			// mark request as pending
+			request.attempts[event.Attempt] = state_pending
+
 			logger.Info(
 				"starting API call",
 				"attempt", event.Attempt,
 			)
 
 		case events.APIResponseEvent:
-			// fetch the request event
+			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
-				logger.Error("response event lacks a causation ID to locate the request")
+				logger.Error("event lacks a causation ID to locate the request")
 				break
 			}
-			call := calls[requestID]
-			if call == nil {
-				logger.Error("failed to locate request event")
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
 				break
 			}
 
-			delete(calls, requestID)
+			// mark request as successful
+			request.attempts[event.Attempt] = state_success
+
+			delete(requests, requestID)
 			logger.Info("completed API call")
 
 		case events.APIFailureEvent:
-			// fetch the request event
+			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
-				logger.Error("failure event lacks a causation ID to locate the request")
+				logger.Error("event lacks a causation ID to locate the request")
 				break
 			}
-			call := calls[requestID]
-			if call == nil {
+			request := requests[requestID]
+			if request == nil {
 				logger.Error("failed to locate request event")
 				break
 			}
 
+			// mark request as failed
+			request.attempts[event.Attempt] = state_failure
+			logger.Info("failed API call")
+
 			// check if any retries remain
-			if call.attempts == call.maxAttempts {
-				delete(calls, requestID)
-				logger.Info("failed API call")
+			if event.Attempt == request.retries {
+				delete(requests, requestID)
 				break
 			}
 
 			// retry event processing asynchronously
-			startApiCall(ctx, store, call.request.Event().(events.RequestEvent), call.request.ID(), call.attempts)
-			call.attempts++
+			startApiCall(ctx, store, request.request.Event().(events.RequestEvent), request.request.ID(), event.Attempt+1)
 		}
 	}
 
@@ -603,12 +630,6 @@ func watchRequestsMain(startAfter string) error {
 		return err
 	}
 
-	// state of request being processed
-	type requestData struct {
-		retries  uint
-		attempts map[uint]requestState
-	}
-
 	// extract summary from request state
 	// pending: API is being queried
 	// success: response received
@@ -631,7 +652,9 @@ func watchRequestsMain(startAfter string) error {
 		return res
 	}
 
-	// map with request states
+	// map of requests being processed currently
+	// Key is the event ID of the initial event (`RequestEvent`), which is
+	// used as causation ID in future events associated with this request.
 	requests := make(map[int32]*requestData)
 
 	// number of retries after a failed request
@@ -639,17 +662,6 @@ func watchRequestsMain(startAfter string) error {
 
 	// process events from the channel
 	for envelope := range ch {
-
-		var state *requestData
-		if envelope.CausationID() == 0 {
-			state = &requestData{
-				retries:  retries,
-				attempts: make(map[uint]requestState),
-			}
-			requests[envelope.ID()] = state
-		} else {
-			state = requests[envelope.CausationID()]
-		}
 
 		switch event := envelope.Event().(type) {
 		case events.ConfigurationEvent:
@@ -659,39 +671,82 @@ func watchRequestsMain(startAfter string) error {
 
 		case events.RequestEvent:
 			// create record to correlate the results with it
+			request := newRequestData(envelope, retries)
+			requests[envelope.ID()] = request
+
+			// create record to correlate the results with it
 			logger.Info(
 				"request received",
 				"request ID", envelope.ID(),
-				"summary", summary(state),
+				"summary", summary(request),
 			)
 
 		case events.APIRequestEvent:
-			state.attempts[event.Attempt] = state_pending
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
+				break
+			}
+
+			// mark request as pending
+			request.attempts[event.Attempt] = state_pending
 
 			logger.Info(
 				"API request starting",
 				"request ID", envelope.CausationID(),
-				"summary", summary(state),
+				"summary", summary(request),
 				"attempt", event.Attempt,
 			)
 
 		case events.APIResponseEvent:
-			state.attempts[event.Attempt] = state_success
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
+				break
+			}
+
+			// mark request as successful
+			request.attempts[event.Attempt] = state_success
 
 			logger.Info(
 				"API request succeeded",
 				"request ID", envelope.CausationID(),
-				"summary", summary(state),
+				"summary", summary(request),
 				"attempt", event.Attempt,
 			)
 
 		case events.APIFailureEvent:
-			state.attempts[event.Attempt] = state_failure
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
+				break
+			}
+
+			// mark request as failed
+			request.attempts[event.Attempt] = state_failure
 
 			logger.Info(
 				"API request failed",
 				"request ID", envelope.CausationID(),
-				"summary", summary(state),
+				"summary", summary(request),
 				"attempt", event.Attempt,
 			)
 		}
