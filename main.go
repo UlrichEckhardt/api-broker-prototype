@@ -18,7 +18,6 @@ var (
 	eventStoreDBHost   string
 	eventStoreLoglevel string
 	logger             log15.Logger
-	store              events.EventStore
 )
 
 func main() {
@@ -204,7 +203,7 @@ func configureAPIStub(c *cli.Context) {
 	)
 }
 
-func initEventStore() error {
+func initEventStore() (events.EventStore, error) {
 	loglevel, err := log15.LvlFromString(eventStoreLoglevel)
 	// setup log handler
 	handler := log15.LvlFilterHandler(loglevel, logger.GetHandler())
@@ -214,33 +213,31 @@ func initEventStore() error {
 	esLogger.SetHandler(handler)
 
 	// create an event store facade
-	var s events.EventStore
+	var store events.EventStore
 	switch eventStoreDriver {
 	case "mongodb":
-		s, err = mongodb.NewEventStore(eventStoreDBHost)
+		store, err = mongodb.NewEventStore(eventStoreDBHost)
 	case "postgresql":
-		s, err = postgresql.NewEventStore(eventStoreDBHost)
+		store, err = postgresql.NewEventStore(eventStoreDBHost)
 	default:
 		err = errors.New("invalid driver selected")
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// add a logging decorator in front
-	s, err = logging.NewLoggingDecorator(s, esLogger)
+	store, err = logging.NewLoggingDecorator(store, esLogger)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	store = s
 
 	logger.Info("initialized event store", "host", eventStoreDBHost)
 
-	return nil
+	return store, nil
 }
 
-func finalizeEventStore() {
+func finalizeEventStore(store events.EventStore) {
 	if err := store.Close(); err != nil {
 		logger.Error("failed to close event store", "error", err)
 	}
@@ -248,10 +245,11 @@ func finalizeEventStore() {
 
 // insert a configuration event
 func configureMain(retries int, timeout float64) error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -272,10 +270,11 @@ func configureMain(retries int, timeout float64) error {
 
 // insert a new event
 func insertMain(class string, data string, causation string) error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -313,10 +312,11 @@ func insertMain(class string, data string, causation string) error {
 
 // list existing elements
 func listMain(lastProcessed string) error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	// parse optional event ID
 	var lastProcessedID int32
@@ -392,12 +392,52 @@ func startApiCall(ctx context.Context, store events.EventStore, event events.Req
 	}()
 }
 
+// state representing the state a request is in
+// This is applied both to the initial request from the client and the single
+// requests made to the API.
+type requestState int
+
+const (
+	state_pending requestState = iota
+	state_success
+	state_failure
+)
+
+func (d requestState) String() string {
+	switch d {
+	case state_pending:
+		return "pending"
+	case state_success:
+		return "success"
+	case state_failure:
+		return "failure"
+	default:
+		return ""
+	}
+}
+
+// metadata for a request
+type requestData struct {
+	request  events.Envelope
+	retries  uint
+	attempts map[uint]requestState
+}
+
+func newRequestData(request events.Envelope, retries uint) *requestData {
+	return &requestData{
+		request:  request,
+		retries:  retries,
+		attempts: make(map[uint]requestState),
+	}
+}
+
 // process existing elements
 func processMain(lastProcessed string) error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	// parse optional event ID
 	var lastProcessedID int32
@@ -423,13 +463,9 @@ func processMain(lastProcessed string) error {
 	timeout := 5 * time.Second
 
 	// map of requests being processed currently
-	// This combines the request data and metadata used for processing it.
-	type requestState struct {
-		request     events.Envelope
-		maxAttempts uint
-		attempts    uint
-	}
-	calls := make(map[int32]*requestState)
+	// Key is the event ID of the initial event (`RequestEvent`), which is
+	// used as causation ID in future events associated with this request.
+	requests := make(map[int32]*requestData)
 
 	// process events from the channel
 	for envelope := range ch {
@@ -467,61 +503,77 @@ func processMain(lastProcessed string) error {
 			logger.Info("starting request processing")
 
 			// create record to correlate the results with it
-			call := &requestState{
-				request:     envelope,
-				maxAttempts: 1 + retries,
-			}
-			calls[envelope.ID()] = call
+			request := newRequestData(envelope, retries)
+			requests[envelope.ID()] = request
 
 			// try event processing asynchronously
-			startApiCall(ctx, store, event, envelope.ID(), call.attempts)
-			call.attempts++
+			startApiCall(ctx, store, event, envelope.ID(), 0)
 
 		case events.APIRequestEvent:
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
+				break
+			}
+
+			// mark request as pending
+			request.attempts[event.Attempt] = state_pending
+
 			logger.Info(
 				"starting API call",
 				"attempt", event.Attempt,
 			)
 
 		case events.APIResponseEvent:
-			// fetch the request event
+			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
-				logger.Error("response event lacks a causation ID to locate the request")
+				logger.Error("event lacks a causation ID to locate the request")
 				break
 			}
-			call := calls[requestID]
-			if call == nil {
-				logger.Error("failed to locate request event")
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
 				break
 			}
 
-			delete(calls, requestID)
+			// mark request as successful
+			request.attempts[event.Attempt] = state_success
+
+			delete(requests, requestID)
 			logger.Info("completed API call")
 
 		case events.APIFailureEvent:
-			// fetch the request event
+			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
-				logger.Error("failure event lacks a causation ID to locate the request")
+				logger.Error("event lacks a causation ID to locate the request")
 				break
 			}
-			call := calls[requestID]
-			if call == nil {
+			request := requests[requestID]
+			if request == nil {
 				logger.Error("failed to locate request event")
 				break
 			}
 
+			// mark request as failed
+			request.attempts[event.Attempt] = state_failure
+			logger.Info("failed API call")
+
 			// check if any retries remain
-			if call.attempts == call.maxAttempts {
-				delete(calls, requestID)
-				logger.Info("failed API call")
+			if event.Attempt == request.retries {
+				delete(requests, requestID)
 				break
 			}
 
 			// retry event processing asynchronously
-			startApiCall(ctx, store, call.request.Event().(events.RequestEvent), call.request.ID(), call.attempts)
-			call.attempts++
+			startApiCall(ctx, store, request.request.Event().(events.RequestEvent), request.request.ID(), event.Attempt+1)
 		}
 	}
 
@@ -530,10 +582,11 @@ func processMain(lastProcessed string) error {
 
 // watch stream of notifications
 func watchNotificationsMain() error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -553,10 +606,11 @@ func watchNotificationsMain() error {
 
 // watch requests as they are processed
 func watchRequestsMain(startAfter string) error {
-	if err := initEventStore(); err != nil {
+	store, err := initEventStore()
+	if err != nil {
 		return err
 	}
-	defer finalizeEventStore()
+	defer finalizeEventStore(store)
 
 	// parse optional event ID
 	var startAfterID int32
@@ -576,36 +630,32 @@ func watchRequestsMain(startAfter string) error {
 		return err
 	}
 
-	// state of request being processed
-	type requestState struct {
-		retries  uint
-		attempts map[uint]string
-	}
-
 	// extract summary from request state
 	// pending: API is being queried
 	// success: response received
 	// failure: request failed
-	summary := func(state *requestState) string {
+	summary := func(state *requestData) requestState {
 		// the default value is pending, which means no actual requests have been made
-		res := "pending"
+		res := state_pending
 
 		for i, attempt := range state.attempts {
 			res = attempt
-			if res == "success" {
+			if res == state_success {
 				// first successful response makes the whole request successful
 				break
 			}
 			if i < state.retries {
 				// if there are still some attempts left, the overall result is still pending
-				res = "pending"
+				res = state_pending
 			}
 		}
 		return res
 	}
 
-	// map with request states
-	requests := make(map[int32]*requestState)
+	// map of requests being processed currently
+	// Key is the event ID of the initial event (`RequestEvent`), which is
+	// used as causation ID in future events associated with this request.
+	requests := make(map[int32]*requestData)
 
 	// number of retries after a failed request
 	retries := uint(0)
@@ -621,47 +671,82 @@ func watchRequestsMain(startAfter string) error {
 
 		case events.RequestEvent:
 			// create record to correlate the results with it
-			state := &requestState{
-				retries:  retries,
-				attempts: make(map[uint]string),
-			}
-			requests[envelope.ID()] = state
+			request := newRequestData(envelope, retries)
+			requests[envelope.ID()] = request
+
+			// create record to correlate the results with it
 			logger.Info(
 				"request received",
 				"request ID", envelope.ID(),
-				"summary", summary(state),
+				"summary", summary(request),
 			)
 
 		case events.APIRequestEvent:
-			state := requests[envelope.CausationID()]
-			state.attempts[event.Attempt] = "pending"
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
+				break
+			}
+
+			// mark request as pending
+			request.attempts[event.Attempt] = state_pending
 
 			logger.Info(
 				"API request starting",
 				"request ID", envelope.CausationID(),
-				"summary", summary(state),
+				"summary", summary(request),
 				"attempt", event.Attempt,
 			)
 
 		case events.APIResponseEvent:
-			state := requests[envelope.CausationID()]
-			state.attempts[event.Attempt] = "success"
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
+				break
+			}
+
+			// mark request as successful
+			request.attempts[event.Attempt] = state_success
 
 			logger.Info(
 				"API request succeeded",
 				"request ID", envelope.CausationID(),
-				"summary", summary(state),
+				"summary", summary(request),
 				"attempt", event.Attempt,
 			)
 
 		case events.APIFailureEvent:
-			state := requests[envelope.CausationID()]
-			state.attempts[event.Attempt] = "failed"
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
+				break
+			}
+
+			// mark request as failed
+			request.attempts[event.Attempt] = state_failure
 
 			logger.Info(
 				"API request failed",
 				"request ID", envelope.CausationID(),
-				"summary", summary(state),
+				"summary", summary(request),
 				"attempt", event.Attempt,
 			)
 		}
