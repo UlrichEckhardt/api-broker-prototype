@@ -125,18 +125,18 @@ func TestRequestCodec(t *testing.T) {
 	}
 }
 
-func TestResponseCodec(t *testing.T) {
-	var codec PostgreSQLEventCodec = &responseEventCodec{}
+func TestAPIResponseCodec(t *testing.T) {
+	var codec PostgreSQLEventCodec = &apiResponseEventCodec{}
 
 	cases := map[string]successCase{
 		"test 1": {
-			event: events.ResponseEvent{
+			event: events.APIResponseEvent{
 				Response: "some response",
 			},
 			data: `{"attempt":0,"response":"some response"}`,
 		},
 		"test 2": {
-			event: events.ResponseEvent{
+			event: events.APIResponseEvent{
 				Attempt:  uint(4),
 				Response: "some response",
 			},
@@ -149,22 +149,39 @@ func TestResponseCodec(t *testing.T) {
 	}
 }
 
-func TestFailureCodec(t *testing.T) {
-	var codec PostgreSQLEventCodec = &failureEventCodec{}
+func TestAPIFailureCodec(t *testing.T) {
+	var codec PostgreSQLEventCodec = &apiFailureEventCodec{}
 
 	cases := map[string]successCase{
 		"test 1": {
-			event: events.FailureEvent{
+			event: events.APIFailureEvent{
 				Failure: "some failure",
 			},
 			data: `{"attempt":0,"failure":"some failure"}`,
 		},
 		"test 2": {
-			event: events.FailureEvent{
+			event: events.APIFailureEvent{
 				Attempt: uint(4),
 				Failure: "some failure",
 			},
 			data: `{"attempt":4,"failure":"some failure"}`,
+		},
+	}
+
+	for name, c := range cases {
+		runSuccessCase(name, c, codec, t)
+	}
+}
+
+func TestAPITimeoutCodec(t *testing.T) {
+	var codec PostgreSQLEventCodec = &apiTimeoutEventCodec{}
+
+	cases := map[string]successCase{
+		"test timeout": {
+			event: events.APITimeoutEvent{
+				Attempt: uint(0),
+			},
+			data: `{"attempt":0}`,
 		},
 	}
 
