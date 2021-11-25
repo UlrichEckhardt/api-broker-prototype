@@ -401,6 +401,7 @@ const (
 	state_pending requestState = iota
 	state_success
 	state_failure
+	state_timeout
 )
 
 func (d requestState) String() string {
@@ -411,6 +412,8 @@ func (d requestState) String() string {
 		return "success"
 	case state_failure:
 		return "failure"
+	case state_timeout:
+		return "timeout"
 	default:
 		return ""
 	}
@@ -431,6 +434,16 @@ func newRequestData(request events.Envelope, retries uint) *requestData {
 	}
 }
 
+// query whether any attempt for the request succeeded
+func (d *requestData) Succeeded() bool {
+	for _, val := range d.attempts {
+		if val == state_success {
+			return true
+		}
+	}
+	return false
+}
+
 // process existing elements
 func processMain(lastProcessed string) error {
 	store, err := initEventStore()
@@ -438,6 +451,12 @@ func processMain(lastProcessed string) error {
 		return err
 	}
 	defer finalizeEventStore(store)
+
+	// wrap the actual event store with the timeout handling decorator
+	store, err = events.NewTimeoutEventStoreDecorator(store, logger)
+	if err != nil {
+		return err
+	}
 
 	// parse optional event ID
 	var lastProcessedID int32
@@ -545,8 +564,6 @@ func processMain(lastProcessed string) error {
 
 			// mark request as successful
 			request.attempts[event.Attempt] = state_success
-
-			delete(requests, requestID)
 			logger.Info("completed API call")
 
 		case events.APIFailureEvent:
@@ -568,7 +585,63 @@ func processMain(lastProcessed string) error {
 
 			// check if any retries remain
 			if event.Attempt == request.retries {
-				delete(requests, requestID)
+				logger.Info("retries exhausted")
+				break
+			}
+
+			// If a retry for this unsuccessful attempt was already made, there
+			// is nothing to do here.
+			if event.Attempt+1 < uint(len(request.attempts)) {
+				logger.Info("retry attempt already started")
+				break
+			}
+
+			// check if a retry or a previous attempt succeeded in the meantime
+			if request.Succeeded() {
+				break
+			}
+
+			// retry event processing asynchronously
+			startApiCall(ctx, store, request.request.Event().(events.RequestEvent), request.request.ID(), event.Attempt+1)
+
+		case events.APITimeoutEvent:
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("timeout event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request event")
+				break
+			}
+
+			// A timeout event can only transition the state from "pending" to
+			// "timeout". Other states like "failure" or "success" are final.
+			if request.attempts[event.Attempt] != state_pending {
+				break
+			}
+
+			// mark request as timed out
+			request.attempts[event.Attempt] = state_timeout
+			logger.Info("API call timed out")
+
+			// check if any retries remain
+			if event.Attempt == request.retries {
+				logger.Info("retries exhausted")
+				break
+			}
+
+			// If a retry for this unsuccessful attempt was already made, there
+			// is nothing to do here.
+			if event.Attempt+1 < uint(len(request.attempts)) {
+				logger.Info("retry attempt already started")
+				break
+			}
+
+			// check if a retry or a previous attempt succeeded in the meantime
+			if request.Succeeded() {
 				break
 			}
 
@@ -745,6 +818,32 @@ func watchRequestsMain(startAfter string) error {
 
 			logger.Info(
 				"API request failed",
+				"request ID", envelope.CausationID(),
+				"summary", summary(request),
+				"attempt", event.Attempt,
+			)
+
+		case events.APITimeoutEvent:
+			// fetch the request data
+			requestID := envelope.CausationID()
+			if requestID == 0 {
+				logger.Error("event lacks a causation ID to locate the request")
+				break
+			}
+			request := requests[requestID]
+			if request == nil {
+				logger.Error("failed to locate request data")
+				break
+			}
+
+			// A timeout event can only transition the state from "pending" to
+			// "timeout". Other states like "failure" or "success" are final.
+			if request.attempts[event.Attempt] == state_pending {
+				request.attempts[event.Attempt] = state_timeout
+			}
+
+			logger.Info(
+				"API request timeout elapsed",
 				"request ID", envelope.CausationID(),
 				"summary", summary(request),
 				"attempt", event.Attempt,

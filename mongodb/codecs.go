@@ -155,3 +155,25 @@ func (codec *apiFailureEventCodec) Deserialize(data bson.M) (events.Event, error
 	}
 	return res, nil
 }
+
+// MongoDB codec for APITimeoutEvents.
+type apiTimeoutEventCodec struct{}
+
+// Class implements the MongoDBEventCodec interface.
+func (codec *apiTimeoutEventCodec) Class() string {
+	return "api-timeout"
+}
+
+// Serialize implements the MongoDBEventCodec interface.
+func (codec *apiTimeoutEventCodec) Serialize(e events.Event) (bson.M, error) {
+	ev := e.(events.APITimeoutEvent)
+	return bson.M{"attempt": int64(ev.Attempt)}, nil
+}
+
+// Deserialize implements the MongoDBEventCodec interface.
+func (codec *apiTimeoutEventCodec) Deserialize(data bson.M) (events.Event, error) {
+	res := events.APITimeoutEvent{
+		Attempt: uint(data["attempt"].(int64)),
+	}
+	return res, nil
+}

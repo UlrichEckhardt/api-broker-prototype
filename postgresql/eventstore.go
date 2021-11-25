@@ -121,6 +121,7 @@ func NewEventStore(host string) (*PostgreSQLEventStore, error) {
 	s.registerCodec(&apiRequestEventCodec{})
 	s.registerCodec(&apiResponseEventCodec{})
 	s.registerCodec(&apiFailureEventCodec{})
+	s.registerCodec(&apiTimeoutEventCodec{})
 
 	return &s, nil
 }
