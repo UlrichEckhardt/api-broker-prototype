@@ -434,6 +434,16 @@ func newRequestData(request events.Envelope, retries uint) *requestData {
 	}
 }
 
+// query whether any attempt for the request succeeded
+func (d *requestData) Succeeded() bool {
+	for _, val := range d.attempts {
+		if val == state_success {
+			return true
+		}
+	}
+	return false
+}
+
 // process existing elements
 func processMain(lastProcessed string) error {
 	store, err := initEventStore()
@@ -586,6 +596,11 @@ func processMain(lastProcessed string) error {
 				break
 			}
 
+			// check if a retry or a previous attempt succeeded in the meantime
+			if request.Succeeded() {
+				break
+			}
+
 			// retry event processing asynchronously
 			startApiCall(ctx, store, request.request.Event().(events.RequestEvent), request.request.ID(), event.Attempt+1)
 
@@ -622,6 +637,11 @@ func processMain(lastProcessed string) error {
 			// is nothing to do here.
 			if event.Attempt+1 < uint(len(request.attempts)) {
 				logger.Info("retry attempt already started")
+				break
+			}
+
+			// check if a retry or a previous attempt succeeded in the meantime
+			if request.Succeeded() {
 				break
 			}
 
