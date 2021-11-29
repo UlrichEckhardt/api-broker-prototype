@@ -35,15 +35,17 @@ func ProcessRequest(request string) (*string, error) {
 	delay := time.Duration((conf.minDuration + rand.Float64()*(conf.maxDuration-conf.minDuration)) * float64(time.Second))
 	time.Sleep(delay)
 
-	// fail randomly
-	if rand.Float64() < conf.failureRate {
-		if rand.Float64() < conf.silentFailureRate {
-			return nil, nil
-		} else {
-			return nil, errors.New("failure")
-		}
+	if rand.Float64() >= conf.failureRate {
+		// successful call
+		res := "response"
+		return &res, nil
 	}
 
-	res := "response"
-	return &res, nil
+	if rand.Float64() >= conf.silentFailureRate {
+		// verbose failure
+		return nil, errors.New("failure")
+	}
+
+	// silent failure
+	return nil, nil
 }
