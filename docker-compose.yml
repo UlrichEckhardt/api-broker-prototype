@@ -6,14 +6,16 @@ services:
   broker:
     build: .
     depends_on:
-      - mongodb
-      - postgresql
+      mongodb:
+        condition: service_healthy
+      postgresql:
+        condition: service_healthy
 
   mongodb:
     image: mongo:4.4
     healthcheck:
       test: ["CMD", "mongo", "--eval", "db.help()"]
-      interval: 30s
+      interval: 10s
       timeout: 2s
       retries: 1
     ports:
@@ -27,6 +29,11 @@ services:
     image: postgres:13.8
     environment:
       - POSTGRES_PASSWORD=postgres
+    healthcheck:
+      test: ["CMD", "pg_isready", "-d", "db_prod"]
+      interval: 10s
+      timeout: 2s
+      retries: 1
     ports:
       - 5432:5432
     volumes:
