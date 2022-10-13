@@ -60,7 +60,7 @@ func (d *EventStoreTimeoutDecorator) Insert(ctx context.Context, event Event, ca
 	}
 
 	// ignore all but API request events
-	request, ok := env.Event().(APIRequestEvent)
+	request, ok := event.(APIRequestEvent)
 	if !ok {
 		return env, err
 	}
