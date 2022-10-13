@@ -10,7 +10,7 @@ services:
       - postgresql
 
   mongodb:
-    image: mongo:4.2
+    image: mongo:4.4
     healthcheck:
       test: ["CMD", "mongo", "--eval", "db.help()"]
       interval: 30s
@@ -24,7 +24,7 @@ services:
         target: /docker-entrypoint-initdb.d/setup-event-store.sh
 
   postgresql:
-    image: postgres:13.3
+    image: postgres:13.8
     environment:
       - POSTGRES_PASSWORD=postgres
     ports:
