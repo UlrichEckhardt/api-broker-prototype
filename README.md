@@ -44,10 +44,8 @@ The following points are explicitly not goals:
 - Choose the storage backend, MongoDB or PostgreSQL. To keep it simple, just put
   `COMPOSE_PROFILES=mongodb-storage` in the .env file for now.
 - Start the setup using `docker compose up --build --detach`.
-- Configure the broker using `docker compose run mongodb-broker configure --retries 2`.
-  In addition to configuring the broker, it creates an event in the MongoDB
-  collection. This is necessary, because you can't wait on an empty capped
-  collection. This is a known bug in MongoDB.
+- Configure the broker using
+  `docker compose run mongodb-broker configure --retries 2 --timeout 3`.
 - Start the event processor using `docker compose run mongodb-broker process`.
   You can adjust the simulated behaviour of the API using various parameters there.
   This will keep running in the foreground.
