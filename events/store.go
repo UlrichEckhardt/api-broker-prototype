@@ -1,9 +1,11 @@
 package events
 
 // This package contains interface definitions for an event store.
+//
 // Generally, this is defined to be agnostic of the storage infrastructure
 // behind it. Its main parts are functions to insert events and to follow
 // the stream of events.
+//
 // TODO:
 //  - The ID is also specific to the default integer representation in MongoDB.
 //    For proper function, only a strict ordering is required, it doesn't have
@@ -30,6 +32,10 @@ type Envelope interface {
 }
 
 // Notification just carries the ID of a persisted event.
+//
+// The idea of a notification is mostly the info that something happened,
+// without actually specifying what happened. That actual info is carried
+// by the `Event` type instead.
 type Notification interface {
 	// ID returns the identifier for the event associated with the notification.
 	ID() int32
@@ -53,14 +59,29 @@ type EventStore interface {
 	// The causation ID is that of the preceding event that caused this new
 	// event. It can be zero when its cause is not a preceding event.
 	Insert(ctx context.Context, event Event, causationID int32) (Envelope, error)
+
 	// Retrieve just the event with the given ID.
 	RetrieveOne(ctx context.Context, id int32) (Envelope, error)
-	// Retrieve all currently existing events, which are provided via the returned channel.
+
+	// Retrieve existing events.
+	//
+	// The events are provided via the returned channel. `startAfter` parameter
+	// specifies the ID preceding the first event to retrieve. If this is zero,
+	// the first event from the store is loaded first. The channel is closed
+	// when all events have been retrieved.
 	LoadEvents(ctx context.Context, startAfter int32) (<-chan Envelope, error)
-	// Follow the stream of notifications. This function emits any newly
-	// created notification via the returned channel.
+
+	// Follow the stream of notifications.
+	//
+	// This function emits any newly created notification via the returned
+	// channel.
 	FollowNotifications(ctx context.Context) (<-chan Notification, error)
-	// Follow the stream of events. This function emits any newly created
-	// persisted event via the returned channel.
+
+	// Follow the stream of events.
+	//
+	// The events are provided via the returned channel. `startAfter` parameter
+	// specifies the ID preceding the first event to retrieve. If this is zero,
+	// the first event from the store is loaded first. When all events from the
+	// store are emitted, the channel blocks until new events are stored.
 	FollowEvents(ctx context.Context, startAfter int32) (<-chan Envelope, error)
 }
