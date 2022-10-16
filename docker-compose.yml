@@ -6,29 +6,32 @@ services:
   broker:
     build: .
     depends_on:
-      - mongodb
-      - postgresql
+      mongodb:
+        condition: service_healthy
+      postgresql:
+        condition: service_healthy
 
   mongodb:
-    image: mongo:4.2
+    image: mongo:4.4
     healthcheck:
       test: ["CMD", "mongo", "--eval", "db.help()"]
-      interval: 30s
+      interval: 10s
       timeout: 2s
       retries: 1
-    ports:
-      - 27017:27017
     volumes:
       - type: bind
         source: ./docker-compose.d/setup-mongodb-event-store.sh
         target: /docker-entrypoint-initdb.d/setup-event-store.sh
 
   postgresql:
-    image: postgres:13.3
+    image: postgres:13.8
     environment:
       - POSTGRES_PASSWORD=postgres
-    ports:
-      - 5432:5432
+    healthcheck:
+      test: ["CMD", "pg_isready", "-d", "db_prod"]
+      interval: 10s
+      timeout: 2s
+      retries: 1
     volumes:
       - type: bind
         source: ./docker-compose.d/setup-postgresql-event-store.sh
