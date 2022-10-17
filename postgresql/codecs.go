@@ -124,7 +124,7 @@ func (codec *apiRequestEventCodec) Serialize(ev events.Event) (pgtype.JSONB, err
 	res := pgtype.JSONB{}
 	err := res.Set(
 		dataRecord{
-			"attempt":  event.Attempt,
+			"attempt": event.Attempt,
 		},
 	)
 	if err != nil {
@@ -138,7 +138,7 @@ func (codec *apiRequestEventCodec) Deserialize(data pgtype.JSONB) (events.Event,
 	tmp := dataRecord{}
 	err := data.AssignTo(&tmp)
 	res := events.APIRequestEvent{
-		Attempt:  (uint)(tmp["attempt"].(float64)),
+		Attempt: (uint)(tmp["attempt"].(float64)),
 	}
 	return res, err
 }
