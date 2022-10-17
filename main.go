@@ -3,6 +3,7 @@ package main
 import (
 	"api-broker-prototype/events"
 	"api-broker-prototype/logging"
+	"api-broker-prototype/mock_api"
 	"api-broker-prototype/mongodb"
 	"api-broker-prototype/postgresql"
 	"context"
@@ -193,9 +194,9 @@ func main() {
 	}
 }
 
-// configure API stub from optional flags passed on the commandline
+// configure mock API from optional flags passed on the commandline
 func configureAPIStub(c *cli.Context) {
-	ConfigureStub(
+	mock_api.Configure(
 		c.Float64("api-failure-rate"),
 		c.Float64("api-silent-failure-rate"),
 		c.Float64("api-min-latency"),
@@ -364,8 +365,8 @@ func startApiCall(ctx context.Context, store events.EventStore, event events.Req
 
 	// TODO: this accesses `store` asynchronously, which may need synchronization
 	go func() {
-		// delegate to API stub
-		response, err := ProcessRequest(event.Request)
+		// delegate to mock API
+		response, err := mock_api.ProcessRequest(event.Request)
 
 		// store results as event
 		if response != nil {
