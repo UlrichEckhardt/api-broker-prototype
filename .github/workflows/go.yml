@@ -27,6 +27,12 @@ jobs:
     - name: Build
       run: go build -v .
 
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
+
     - name: Test
       run: go test -v ./...
 
@@ -55,6 +61,12 @@ jobs:
 
     - name: Build
       run: go build -v .
+
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
 
     - name: Test
       run: go test -v ./...
@@ -85,6 +97,12 @@ jobs:
     - name: Build
       run: go build -v .
 
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
+
     - name: Test
       run: go test -v ./...
 
@@ -113,6 +131,12 @@ jobs:
 
     - name: Build
       run: go build -v .
+
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
 
     - name: Test
       run: go test -v ./...
@@ -143,6 +167,12 @@ jobs:
     - name: Build
       run: go build -v .
 
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
+
     - name: Test
       run: go test -v ./...
 
@@ -171,6 +201,12 @@ jobs:
 
     - name: Build
       run: go build -v .
+
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
 
     - name: Test
       run: go test -v ./...
