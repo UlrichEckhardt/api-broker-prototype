@@ -174,10 +174,10 @@ func TestAPIRequestCodec(t *testing.T) {
 	cases := map[string]testcase{
 		"test request": {
 			event: events.APIRequestEvent{
-				Attempt:  uint(0),
+				Attempt: uint(0),
 			},
 			data: bson.M{
-				"attempt":  int64(0),
+				"attempt": int64(0),
 			},
 		},
 	}

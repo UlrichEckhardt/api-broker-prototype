@@ -89,7 +89,7 @@ func (codec *apiRequestEventCodec) Class() string {
 func (codec *apiRequestEventCodec) Serialize(e events.Event) (bson.M, error) {
 	ev := e.(events.APIRequestEvent)
 	res := bson.M{
-		"attempt":  int64(ev.Attempt),
+		"attempt": int64(ev.Attempt),
 	}
 	return res, nil
 }
@@ -97,7 +97,7 @@ func (codec *apiRequestEventCodec) Serialize(e events.Event) (bson.M, error) {
 // Deserialize implements the MongoDBEventCodec interface.
 func (codec *apiRequestEventCodec) Deserialize(data bson.M) (events.Event, error) {
 	res := events.APIRequestEvent{
-		Attempt:  uint(data["attempt"].(int64)),
+		Attempt: uint(data["attempt"].(int64)),
 	}
 	return res, nil
 }
