@@ -354,7 +354,7 @@ func listMain(lastProcessed string) error {
 }
 
 // process existing elements
-func processMain(lastProcessed string) error {
+func processMain(startAfter string) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
@@ -362,19 +362,19 @@ func processMain(lastProcessed string) error {
 	defer finalizeEventStore(store)
 
 	// parse optional event ID
-	var lastProcessedID int32
-	if lastProcessed != "" {
-		id, err := store.ParseEventID(lastProcessed)
+	var startAfterID int32
+	if startAfter != "" {
+		id, err := store.ParseEventID(startAfter)
 		if err != nil {
 			return err
 		}
-		lastProcessedID = id
+		startAfterID = id
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	return broker.ProcessRequests(ctx, store, logger, lastProcessedID)
+	return broker.ProcessRequests(ctx, store, logger, startAfterID)
 }
 
 // watch stream of notifications
@@ -402,7 +402,7 @@ func watchNotificationsMain() error {
 }
 
 // watch requests as they are processed
-func watchRequestsMain(lastProcessed string) error {
+func watchRequestsMain(startAfter string) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
@@ -410,17 +410,17 @@ func watchRequestsMain(lastProcessed string) error {
 	defer finalizeEventStore(store)
 
 	// parse optional event ID
-	var lastProcessedID int32
-	if lastProcessed != "" {
-		id, err := store.ParseEventID(lastProcessed)
+	var startAfterID int32
+	if startAfter != "" {
+		id, err := store.ParseEventID(startAfter)
 		if err != nil {
 			return err
 		}
-		lastProcessedID = id
+		startAfterID = id
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	return broker.WatchRequests(ctx, store, logger, lastProcessedID)
+	return broker.WatchRequests(ctx, store, logger, startAfterID)
 }
