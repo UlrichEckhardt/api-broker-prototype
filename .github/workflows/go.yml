@@ -27,8 +27,14 @@ jobs:
     - name: Build
       run: go build -v .
 
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
+
     - name: Test
-      run: go test -v ./events ./logging ./mongodb ./postgresql
+      run: go test -v ./...
 
 
   build-1_15:
@@ -56,8 +62,14 @@ jobs:
     - name: Build
       run: go build -v .
 
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
+
     - name: Test
-      run: go test -v ./events ./logging ./mongodb ./postgresql
+      run: go test -v ./...
 
 
   build-1_16:
@@ -85,8 +97,14 @@ jobs:
     - name: Build
       run: go build -v .
 
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
+
     - name: Test
-      run: go test -v ./events ./logging ./mongodb ./postgresql
+      run: go test -v ./...
 
 
   build-1_17:
@@ -114,8 +132,14 @@ jobs:
     - name: Build
       run: go build -v .
 
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
+
     - name: Test
-      run: go test -v ./events ./logging ./mongodb ./postgresql
+      run: go test -v ./...
 
 
   build-1_18:
@@ -143,8 +167,14 @@ jobs:
     - name: Build
       run: go build -v .
 
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
+
     - name: Test
-      run: go test -v ./events ./logging ./mongodb ./postgresql
+      run: go test -v ./...
 
 
   build-1_19:
@@ -172,5 +202,11 @@ jobs:
     - name: Build
       run: go build -v .
 
+    - name: Format
+      run: go fmt ./... && git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
+
     - name: Test
-      run: go test -v ./events ./logging ./mongodb ./postgresql
+      run: go test -v ./...

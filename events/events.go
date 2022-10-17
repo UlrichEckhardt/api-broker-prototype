@@ -48,7 +48,7 @@ func (e RequestEvent) Class() string {
 // the APIRequestEvent represents a communication attempt with the API
 // When starting the communication attempt, this event is emitted.
 type APIRequestEvent struct {
-	Attempt  uint // zero-based index of the attempt
+	Attempt uint // zero-based index of the attempt
 }
 
 // Class implements the Event interface.
