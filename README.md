@@ -39,24 +39,6 @@ The following points are explicitly not goals:
 
 ## How to use
 
-### Running things locally
-
-- Start a MongoDB using `bash startup.sh`.
-- Configure the broker using e.g. `./api-broker-prototype configure --retries 2`.
-  In addition to configuring the broker, it creates an event in the MongoDB
-  collection. This is necessary, because you can't wait on an empty capped
-  collection. This is a bug (IMHO) in MongoDB and some people even reported
-  it as such.
-- Start the event processor using `./api-broker-prototype process`. You can adjust
-  the simulated behaviour of the API using various parameters there.
-- In order to simulate a call, `./api-broker-prototype insert request "test"`.
-- You should now be able to see the event processor simulating an API call, storing
-  the resulting info in the event store.
-- Using `./api-broker-prototype list`, you can get a list of all events and their
-  contents.
-- Finally, you can kill the event processor and shut down the MongoDB using
-  `bash shutdown.sh`.
-
 ### Running things using docker-compose
 
 - Start the setup using `docker-compose up --build --detach`.
