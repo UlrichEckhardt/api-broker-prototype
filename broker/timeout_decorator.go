@@ -61,7 +61,7 @@ func (d *EventStoreTimeoutDecorator) Insert(ctx context.Context, event events.Ev
 	}
 
 	// ignore all but API request events
-	request, ok := event.(events.APIRequestEvent)
+	request, ok := event.(APIRequestEvent)
 	if !ok {
 		return env, err
 	}
@@ -73,7 +73,7 @@ func (d *EventStoreTimeoutDecorator) Insert(ctx context.Context, event events.Ev
 		func() {
 			_, err := d.store.Insert(
 				ctx,
-				events.APITimeoutEvent{
+				APITimeoutEvent{
 					Attempt: request.Attempt,
 				},
 				causationID,
@@ -118,7 +118,7 @@ func (d *EventStoreTimeoutDecorator) FollowEvents(ctx context.Context, start int
 		defer close(res)
 
 		for env := range stream {
-			config, ok := env.Event().(events.ConfigurationEvent)
+			config, ok := env.Event().(ConfigurationEvent)
 			if ok {
 				// store the timeout value from the configuration event
 				if config.Timeout > 0 {

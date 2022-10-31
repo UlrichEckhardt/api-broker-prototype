@@ -256,7 +256,7 @@ func configureMain(retries int, timeout float64) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	event := events.ConfigurationEvent{
+	event := broker.ConfigurationEvent{
 		Retries: int32(retries),
 		Timeout: timeout,
 	}
@@ -287,11 +287,11 @@ func insertMain(class string, data string, causation string) error {
 	case "simple":
 		event = events.SimpleEvent{Message: data}
 	case "request":
-		event = events.RequestEvent{Request: data}
+		event = broker.RequestEvent{Request: data}
 	case "response":
-		event = events.APIResponseEvent{Response: data}
+		event = broker.APIResponseEvent{Response: data}
 	case "failure":
-		event = events.APIFailureEvent{Failure: data}
+		event = broker.APIFailureEvent{Failure: data}
 	default:
 		return errors.New("unrecognized event class")
 	}
@@ -354,11 +354,11 @@ func listMain(lastProcessed string) error {
 }
 
 // utility function to invoke the API and store the result as event
-func startApiCall(ctx context.Context, store events.EventStore, event events.RequestEvent, causationID int32, attempt uint) {
+func startApiCall(ctx context.Context, store events.EventStore, event broker.RequestEvent, causationID int32, attempt uint) {
 	// emit event that a request was started
 	store.Insert(
 		ctx,
-		events.APIRequestEvent{
+		broker.APIRequestEvent{
 			Attempt: attempt,
 		},
 		causationID,
@@ -373,7 +373,7 @@ func startApiCall(ctx context.Context, store events.EventStore, event events.Req
 		if response != nil {
 			store.Insert(
 				ctx,
-				events.APIResponseEvent{
+				broker.APIResponseEvent{
 					Attempt:  attempt,
 					Response: *response,
 				},
@@ -382,7 +382,7 @@ func startApiCall(ctx context.Context, store events.EventStore, event events.Req
 		} else if err != nil {
 			store.Insert(
 				ctx,
-				events.APIFailureEvent{
+				broker.APIFailureEvent{
 					Attempt: attempt,
 					Failure: err.Error(),
 				},
@@ -500,7 +500,7 @@ func processMain(lastProcessed string) error {
 		)
 
 		switch event := envelope.Event().(type) {
-		case events.ConfigurationEvent:
+		case broker.ConfigurationEvent:
 			logger.Info(
 				"updating API configuration",
 				"retries", event.Retries,
@@ -520,7 +520,7 @@ func processMain(lastProcessed string) error {
 				"timeout", timeout,
 			)
 
-		case events.RequestEvent:
+		case broker.RequestEvent:
 			logger.Info("starting request processing")
 
 			// create record to correlate the results with it
@@ -530,7 +530,7 @@ func processMain(lastProcessed string) error {
 			// try event processing asynchronously
 			startApiCall(ctx, store, event, envelope.ID(), 0)
 
-		case events.APIRequestEvent:
+		case broker.APIRequestEvent:
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
@@ -551,7 +551,7 @@ func processMain(lastProcessed string) error {
 				"attempt", event.Attempt,
 			)
 
-		case events.APIResponseEvent:
+		case broker.APIResponseEvent:
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
@@ -568,7 +568,7 @@ func processMain(lastProcessed string) error {
 			request.attempts[event.Attempt] = state_success
 			logger.Info("completed API call")
 
-		case events.APIFailureEvent:
+		case broker.APIFailureEvent:
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
@@ -604,9 +604,9 @@ func processMain(lastProcessed string) error {
 			}
 
 			// retry event processing asynchronously
-			startApiCall(ctx, store, request.request.Event().(events.RequestEvent), request.request.ID(), event.Attempt+1)
+			startApiCall(ctx, store, request.request.Event().(broker.RequestEvent), request.request.ID(), event.Attempt+1)
 
-		case events.APITimeoutEvent:
+		case broker.APITimeoutEvent:
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
@@ -648,7 +648,7 @@ func processMain(lastProcessed string) error {
 			}
 
 			// retry event processing asynchronously
-			startApiCall(ctx, store, request.request.Event().(events.RequestEvent), request.request.ID(), event.Attempt+1)
+			startApiCall(ctx, store, request.request.Event().(broker.RequestEvent), request.request.ID(), event.Attempt+1)
 		}
 	}
 
@@ -739,12 +739,12 @@ func watchRequestsMain(startAfter string) error {
 	for envelope := range ch {
 
 		switch event := envelope.Event().(type) {
-		case events.ConfigurationEvent:
+		case broker.ConfigurationEvent:
 			if event.Retries >= 0 {
 				retries = uint(event.Retries)
 			}
 
-		case events.RequestEvent:
+		case broker.RequestEvent:
 			// create record to correlate the results with it
 			request := newRequestData(envelope, retries)
 			requests[envelope.ID()] = request
@@ -756,7 +756,7 @@ func watchRequestsMain(startAfter string) error {
 				"summary", summary(request),
 			)
 
-		case events.APIRequestEvent:
+		case broker.APIRequestEvent:
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
@@ -779,7 +779,7 @@ func watchRequestsMain(startAfter string) error {
 				"attempt", event.Attempt,
 			)
 
-		case events.APIResponseEvent:
+		case broker.APIResponseEvent:
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
@@ -802,7 +802,7 @@ func watchRequestsMain(startAfter string) error {
 				"attempt", event.Attempt,
 			)
 
-		case events.APIFailureEvent:
+		case broker.APIFailureEvent:
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
@@ -825,7 +825,7 @@ func watchRequestsMain(startAfter string) error {
 				"attempt", event.Attempt,
 			)
 
-		case events.APITimeoutEvent:
+		case broker.APITimeoutEvent:
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {

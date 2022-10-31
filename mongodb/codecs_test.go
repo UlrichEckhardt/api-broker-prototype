@@ -1,6 +1,7 @@
 package mongodb
 
 import (
+	"api-broker-prototype/broker"
 	"api-broker-prototype/events"
 	"go.mongodb.org/mongo-driver/bson"
 	"reflect"
@@ -133,7 +134,7 @@ func TestConfigurationCodec(t *testing.T) {
 
 	cases := map[string]testcase{
 		"test configuration": {
-			event: events.ConfigurationEvent{
+			event: broker.ConfigurationEvent{
 				Retries: 2,
 				Timeout: 2.5,
 			},
@@ -154,7 +155,7 @@ func TestRequestCodec(t *testing.T) {
 
 	cases := map[string]testcase{
 		"test request": {
-			event: events.RequestEvent{
+			event: broker.RequestEvent{
 				Request: "some request",
 			},
 			data: bson.M{
@@ -173,7 +174,7 @@ func TestAPIRequestCodec(t *testing.T) {
 
 	cases := map[string]testcase{
 		"test request": {
-			event: events.APIRequestEvent{
+			event: broker.APIRequestEvent{
 				Attempt: uint(0),
 			},
 			data: bson.M{
@@ -192,7 +193,7 @@ func TestAPIResponseCodec(t *testing.T) {
 
 	cases := map[string]testcase{
 		"test response": {
-			event: events.APIResponseEvent{
+			event: broker.APIResponseEvent{
 				Attempt:  uint(0),
 				Response: "some response",
 			},
@@ -213,7 +214,7 @@ func TestAPIFailureCodec(t *testing.T) {
 
 	cases := map[string]testcase{
 		"test failure": {
-			event: events.APIFailureEvent{
+			event: broker.APIFailureEvent{
 				Attempt: uint(0),
 				Failure: "some failure",
 			},
@@ -234,7 +235,7 @@ func TestAPITimeoutCodec(t *testing.T) {
 
 	cases := map[string]testcase{
 		"test timeout": {
-			event: events.APITimeoutEvent{
+			event: broker.APITimeoutEvent{
 				Attempt: uint(0),
 			},
 			data: bson.M{
