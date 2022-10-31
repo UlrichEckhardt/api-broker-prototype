@@ -1,6 +1,7 @@
 package main
 
 import (
+	"api-broker-prototype/broker"
 	"api-broker-prototype/events"
 	"api-broker-prototype/logging"
 	"api-broker-prototype/mock_api"
@@ -454,7 +455,7 @@ func processMain(lastProcessed string) error {
 	defer finalizeEventStore(store)
 
 	// wrap the actual event store with the timeout handling decorator
-	store, err = events.NewTimeoutEventStoreDecorator(store, logger)
+	store, err = broker.NewTimeoutEventStoreDecorator(store, logger)
 	if err != nil {
 		return err
 	}

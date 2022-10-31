@@ -1,6 +1,7 @@
-package events
+package broker
 
 import (
+	"api-broker-prototype/events"
 	"context"
 	"github.com/inconshreveable/log15"
 	"time"
@@ -16,13 +17,13 @@ import (
 // that a response is regularly followed by a timeout. Additionally, you could
 // have a timeout followed by a response as well.
 type EventStoreTimeoutDecorator struct {
-	store   EventStore // decorated event store
+	store   events.EventStore // decorated event store
 	logger  log15.Logger
 	timeout *time.Duration
 }
 
 // NewTimeoutEventStoreDecorator creates a decorator for an event store.
-func NewTimeoutEventStoreDecorator(store EventStore, logger log15.Logger) (*EventStoreTimeoutDecorator, error) {
+func NewTimeoutEventStoreDecorator(store events.EventStore, logger log15.Logger) (*EventStoreTimeoutDecorator, error) {
 	res := &EventStoreTimeoutDecorator{
 		store:   store,
 		logger:  logger,
@@ -47,7 +48,7 @@ func (d *EventStoreTimeoutDecorator) Close() error {
 }
 
 // Insert implements the EventStore interface.
-func (d *EventStoreTimeoutDecorator) Insert(ctx context.Context, event Event, causationID int32) (Envelope, error) {
+func (d *EventStoreTimeoutDecorator) Insert(ctx context.Context, event events.Event, causationID int32) (events.Envelope, error) {
 	// forward call to the decorated event store first
 	env, err := d.store.Insert(ctx, event, causationID)
 	if err != nil {
@@ -60,7 +61,7 @@ func (d *EventStoreTimeoutDecorator) Insert(ctx context.Context, event Event, ca
 	}
 
 	// ignore all but API request events
-	request, ok := event.(APIRequestEvent)
+	request, ok := event.(events.APIRequestEvent)
 	if !ok {
 		return env, err
 	}
@@ -72,7 +73,7 @@ func (d *EventStoreTimeoutDecorator) Insert(ctx context.Context, event Event, ca
 		func() {
 			_, err := d.store.Insert(
 				ctx,
-				APITimeoutEvent{
+				events.APITimeoutEvent{
 					Attempt: request.Attempt,
 				},
 				causationID,
@@ -88,22 +89,22 @@ func (d *EventStoreTimeoutDecorator) Insert(ctx context.Context, event Event, ca
 }
 
 // RetrieveOne implements the EventStore interface by simply forwarding.
-func (d *EventStoreTimeoutDecorator) RetrieveOne(ctx context.Context, id int32) (Envelope, error) {
+func (d *EventStoreTimeoutDecorator) RetrieveOne(ctx context.Context, id int32) (events.Envelope, error) {
 	return d.store.RetrieveOne(ctx, id)
 }
 
 // LoadEvents implements the EventStore interface by simply forwarding.
-func (d *EventStoreTimeoutDecorator) LoadEvents(ctx context.Context, start int32) (<-chan Envelope, error) {
+func (d *EventStoreTimeoutDecorator) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
 	return d.store.LoadEvents(ctx, start)
 }
 
 // FollowNotifications implements the EventStore interface by simply forwarding.
-func (d *EventStoreTimeoutDecorator) FollowNotifications(ctx context.Context) (<-chan Notification, error) {
+func (d *EventStoreTimeoutDecorator) FollowNotifications(ctx context.Context) (<-chan events.Notification, error) {
 	return d.store.FollowNotifications(ctx)
 }
 
 // FollowEvents implements the EventStore interface.
-func (d *EventStoreTimeoutDecorator) FollowEvents(ctx context.Context, start int32) (<-chan Envelope, error) {
+func (d *EventStoreTimeoutDecorator) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
 	// forward call to the decorated event store first
 	stream, err := d.store.FollowEvents(ctx, start)
 	if err != nil {
@@ -111,13 +112,13 @@ func (d *EventStoreTimeoutDecorator) FollowEvents(ctx context.Context, start int
 	}
 
 	// create intermediate stream to intercept and log the events loaded
-	res := make(chan Envelope)
+	res := make(chan events.Envelope)
 	go func() {
 		// close channel on finish
 		defer close(res)
 
 		for env := range stream {
-			config, ok := env.Event().(ConfigurationEvent)
+			config, ok := env.Event().(events.ConfigurationEvent)
 			if ok {
 				// store the timeout value from the configuration event
 				if config.Timeout > 0 {
