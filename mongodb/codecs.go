@@ -3,6 +3,7 @@ package mongodb
 // This file provides MongoDB codecs for the events defined in events.go.
 
 import (
+	"api-broker-prototype/broker"
 	"api-broker-prototype/events"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -39,13 +40,13 @@ func (codec *configurationEventCodec) Class() string {
 
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *configurationEventCodec) Serialize(e events.Event) (bson.M, error) {
-	ev := e.(events.ConfigurationEvent)
+	ev := e.(broker.ConfigurationEvent)
 	return bson.M{"retries": ev.Retries, "timeout": ev.Timeout}, nil
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
 func (codec *configurationEventCodec) Deserialize(data bson.M) (events.Event, error) {
-	res := events.ConfigurationEvent{
+	res := broker.ConfigurationEvent{
 		Retries: data["retries"].(int32),
 		Timeout: data["timeout"].(float64),
 	}
@@ -62,7 +63,7 @@ func (codec *requestEventCodec) Class() string {
 
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *requestEventCodec) Serialize(e events.Event) (bson.M, error) {
-	ev := e.(events.RequestEvent)
+	ev := e.(broker.RequestEvent)
 	res := bson.M{
 		"request": ev.Request,
 	}
@@ -71,7 +72,7 @@ func (codec *requestEventCodec) Serialize(e events.Event) (bson.M, error) {
 
 // Deserialize implements the MongoDBEventCodec interface.
 func (codec *requestEventCodec) Deserialize(data bson.M) (events.Event, error) {
-	res := events.RequestEvent{
+	res := broker.RequestEvent{
 		Request: data["request"].(string),
 	}
 	return res, nil
@@ -87,7 +88,7 @@ func (codec *apiRequestEventCodec) Class() string {
 
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *apiRequestEventCodec) Serialize(e events.Event) (bson.M, error) {
-	ev := e.(events.APIRequestEvent)
+	ev := e.(broker.APIRequestEvent)
 	res := bson.M{
 		"attempt": int64(ev.Attempt),
 	}
@@ -96,7 +97,7 @@ func (codec *apiRequestEventCodec) Serialize(e events.Event) (bson.M, error) {
 
 // Deserialize implements the MongoDBEventCodec interface.
 func (codec *apiRequestEventCodec) Deserialize(data bson.M) (events.Event, error) {
-	res := events.APIRequestEvent{
+	res := broker.APIRequestEvent{
 		Attempt: uint(data["attempt"].(int64)),
 	}
 	return res, nil
@@ -112,7 +113,7 @@ func (codec *apiResponseEventCodec) Class() string {
 
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *apiResponseEventCodec) Serialize(e events.Event) (bson.M, error) {
-	ev := e.(events.APIResponseEvent)
+	ev := e.(broker.APIResponseEvent)
 	res := bson.M{
 		"attempt":  int64(ev.Attempt),
 		"response": ev.Response,
@@ -122,7 +123,7 @@ func (codec *apiResponseEventCodec) Serialize(e events.Event) (bson.M, error) {
 
 // Deserialize implements the MongoDBEventCodec interface.
 func (codec *apiResponseEventCodec) Deserialize(data bson.M) (events.Event, error) {
-	res := events.APIResponseEvent{
+	res := broker.APIResponseEvent{
 		Attempt:  uint(data["attempt"].(int64)),
 		Response: data["response"].(string),
 	}
@@ -139,7 +140,7 @@ func (codec *apiFailureEventCodec) Class() string {
 
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *apiFailureEventCodec) Serialize(e events.Event) (bson.M, error) {
-	ev := e.(events.APIFailureEvent)
+	ev := e.(broker.APIFailureEvent)
 	res := bson.M{
 		"attempt": int64(ev.Attempt),
 		"failure": ev.Failure,
@@ -149,7 +150,7 @@ func (codec *apiFailureEventCodec) Serialize(e events.Event) (bson.M, error) {
 
 // Deserialize implements the MongoDBEventCodec interface.
 func (codec *apiFailureEventCodec) Deserialize(data bson.M) (events.Event, error) {
-	res := events.APIFailureEvent{
+	res := broker.APIFailureEvent{
 		Attempt: uint(data["attempt"].(int64)),
 		Failure: data["failure"].(string),
 	}
@@ -166,13 +167,13 @@ func (codec *apiTimeoutEventCodec) Class() string {
 
 // Serialize implements the MongoDBEventCodec interface.
 func (codec *apiTimeoutEventCodec) Serialize(e events.Event) (bson.M, error) {
-	ev := e.(events.APITimeoutEvent)
+	ev := e.(broker.APITimeoutEvent)
 	return bson.M{"attempt": int64(ev.Attempt)}, nil
 }
 
 // Deserialize implements the MongoDBEventCodec interface.
 func (codec *apiTimeoutEventCodec) Deserialize(data bson.M) (events.Event, error) {
-	res := events.APITimeoutEvent{
+	res := broker.APITimeoutEvent{
 		Attempt: uint(data["attempt"].(int64)),
 	}
 	return res, nil

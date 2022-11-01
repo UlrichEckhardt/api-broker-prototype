@@ -1,10 +1,12 @@
 package postgresql
 
 import (
+	"api-broker-prototype/broker"
 	"api-broker-prototype/events"
-	"github.com/jackc/pgtype"
 	"reflect"
 	"testing"
+
+	"github.com/jackc/pgtype"
 )
 
 type successCase struct {
@@ -95,7 +97,7 @@ func TestConfigurationCodec(t *testing.T) {
 
 	cases := map[string]successCase{
 		"test 1": {
-			event: events.ConfigurationEvent{
+			event: broker.ConfigurationEvent{
 				Retries: 2,
 				Timeout: 2.5,
 			},
@@ -113,7 +115,7 @@ func TestRequestCodec(t *testing.T) {
 
 	cases := map[string]successCase{
 		"test 1": {
-			event: events.RequestEvent{
+			event: broker.RequestEvent{
 				Request: "some request",
 			},
 			data: `{"request":"some request"}`,
@@ -130,13 +132,13 @@ func TestAPIResponseCodec(t *testing.T) {
 
 	cases := map[string]successCase{
 		"test 1": {
-			event: events.APIResponseEvent{
+			event: broker.APIResponseEvent{
 				Response: "some response",
 			},
 			data: `{"attempt":0,"response":"some response"}`,
 		},
 		"test 2": {
-			event: events.APIResponseEvent{
+			event: broker.APIResponseEvent{
 				Attempt:  uint(4),
 				Response: "some response",
 			},
@@ -154,13 +156,13 @@ func TestAPIFailureCodec(t *testing.T) {
 
 	cases := map[string]successCase{
 		"test 1": {
-			event: events.APIFailureEvent{
+			event: broker.APIFailureEvent{
 				Failure: "some failure",
 			},
 			data: `{"attempt":0,"failure":"some failure"}`,
 		},
 		"test 2": {
-			event: events.APIFailureEvent{
+			event: broker.APIFailureEvent{
 				Attempt: uint(4),
 				Failure: "some failure",
 			},
@@ -178,7 +180,7 @@ func TestAPITimeoutCodec(t *testing.T) {
 
 	cases := map[string]successCase{
 		"test timeout": {
-			event: events.APITimeoutEvent{
+			event: broker.APITimeoutEvent{
 				Attempt: uint(0),
 			},
 			data: `{"attempt":0}`,

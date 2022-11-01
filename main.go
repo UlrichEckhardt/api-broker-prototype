@@ -1,8 +1,10 @@
 package main
 
 import (
+	"api-broker-prototype/broker"
 	"api-broker-prototype/events"
 	"api-broker-prototype/logging"
+	"api-broker-prototype/mock_api"
 	"api-broker-prototype/mongodb"
 	"api-broker-prototype/postgresql"
 	"context"
@@ -193,9 +195,9 @@ func main() {
 	}
 }
 
-// configure API stub from optional flags passed on the commandline
+// configure mock API from optional flags passed on the commandline
 func configureAPIStub(c *cli.Context) {
-	ConfigureStub(
+	mock_api.Configure(
 		c.Float64("api-failure-rate"),
 		c.Float64("api-silent-failure-rate"),
 		c.Float64("api-min-latency"),
@@ -254,7 +256,7 @@ func configureMain(retries int, timeout float64) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	event := events.ConfigurationEvent{
+	event := broker.ConfigurationEvent{
 		Retries: int32(retries),
 		Timeout: timeout,
 	}
@@ -285,11 +287,11 @@ func insertMain(class string, data string, causation string) error {
 	case "simple":
 		event = events.SimpleEvent{Message: data}
 	case "request":
-		event = events.RequestEvent{Request: data}
+		event = broker.RequestEvent{Request: data}
 	case "response":
-		event = events.APIResponseEvent{Response: data}
+		event = broker.APIResponseEvent{Response: data}
 	case "failure":
-		event = events.APIFailureEvent{Failure: data}
+		event = broker.APIFailureEvent{Failure: data}
 	default:
 		return errors.New("unrecognized event class")
 	}
@@ -351,99 +353,6 @@ func listMain(lastProcessed string) error {
 	return store.Error()
 }
 
-// utility function to invoke the API and store the result as event
-func startApiCall(ctx context.Context, store events.EventStore, event events.RequestEvent, causationID int32, attempt uint) {
-	// emit event that a request was started
-	store.Insert(
-		ctx,
-		events.APIRequestEvent{
-			Attempt: attempt,
-		},
-		causationID,
-	)
-
-	// TODO: this accesses `store` asynchronously, which may need synchronization
-	go func() {
-		// delegate to API stub
-		response, err := ProcessRequest(event.Request)
-
-		// store results as event
-		if response != nil {
-			store.Insert(
-				ctx,
-				events.APIResponseEvent{
-					Attempt:  attempt,
-					Response: *response,
-				},
-				causationID,
-			)
-		} else if err != nil {
-			store.Insert(
-				ctx,
-				events.APIFailureEvent{
-					Attempt: attempt,
-					Failure: err.Error(),
-				},
-				causationID,
-			)
-		} else {
-			logger.Info("No response from API.")
-		}
-	}()
-}
-
-// state representing the state a request is in
-// This is applied both to the initial request from the client and the single
-// requests made to the API.
-type requestState int
-
-const (
-	state_pending requestState = iota
-	state_success
-	state_failure
-	state_timeout
-)
-
-func (d requestState) String() string {
-	switch d {
-	case state_pending:
-		return "pending"
-	case state_success:
-		return "success"
-	case state_failure:
-		return "failure"
-	case state_timeout:
-		return "timeout"
-	default:
-		return ""
-	}
-}
-
-// metadata for a request
-type requestData struct {
-	request  events.Envelope
-	retries  uint
-	attempts map[uint]requestState
-}
-
-func newRequestData(request events.Envelope, retries uint) *requestData {
-	return &requestData{
-		request:  request,
-		retries:  retries,
-		attempts: make(map[uint]requestState),
-	}
-}
-
-// query whether any attempt for the request succeeded
-func (d *requestData) Succeeded() bool {
-	for _, val := range d.attempts {
-		if val == state_success {
-			return true
-		}
-	}
-	return false
-}
-
 // process existing elements
 func processMain(lastProcessed string) error {
 	store, err := initEventStore()
@@ -451,12 +360,6 @@ func processMain(lastProcessed string) error {
 		return err
 	}
 	defer finalizeEventStore(store)
-
-	// wrap the actual event store with the timeout handling decorator
-	store, err = events.NewTimeoutEventStoreDecorator(store, logger)
-	if err != nil {
-		return err
-	}
 
 	// parse optional event ID
 	var lastProcessedID int32
@@ -471,186 +374,7 @@ func processMain(lastProcessed string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch, err := store.FollowEvents(ctx, lastProcessedID)
-	if err != nil {
-		return err
-	}
-
-	// number of retries after a failed request
-	retries := uint(0)
-	// maximum duration before considering an attempt failed
-	timeout := 5 * time.Second
-
-	// map of requests being processed currently
-	// Key is the event ID of the initial event (`RequestEvent`), which is
-	// used as causation ID in future events associated with this request.
-	requests := make(map[int32]*requestData)
-
-	// process events from the channel
-	for envelope := range ch {
-		logger.Info(
-			"processing event",
-			"id", envelope.ID(),
-			"class", envelope.Event().Class(),
-			"created", envelope.Created().Format(time.RFC3339),
-			"causation_id", envelope.CausationID(),
-			"data", envelope.Event(),
-		)
-
-		switch event := envelope.Event().(type) {
-		case events.ConfigurationEvent:
-			logger.Info(
-				"updating API configuration",
-				"retries", event.Retries,
-				"timeout", event.Timeout,
-			)
-
-			// store configuration
-			if event.Retries >= 0 {
-				retries = uint(event.Retries)
-			}
-			if event.Timeout >= 0 {
-				timeout = time.Duration(event.Timeout * float64(time.Second))
-			}
-			logger.Info(
-				"updated API configuration",
-				"retries", retries,
-				"timeout", timeout,
-			)
-
-		case events.RequestEvent:
-			logger.Info("starting request processing")
-
-			// create record to correlate the results with it
-			request := newRequestData(envelope, retries)
-			requests[envelope.ID()] = request
-
-			// try event processing asynchronously
-			startApiCall(ctx, store, event, envelope.ID(), 0)
-
-		case events.APIRequestEvent:
-			// fetch the request data
-			requestID := envelope.CausationID()
-			if requestID == 0 {
-				logger.Error("event lacks a causation ID to locate the request")
-				break
-			}
-			request := requests[requestID]
-			if request == nil {
-				logger.Error("failed to locate request data")
-				break
-			}
-
-			// mark request as pending
-			request.attempts[event.Attempt] = state_pending
-
-			logger.Info(
-				"starting API call",
-				"attempt", event.Attempt,
-			)
-
-		case events.APIResponseEvent:
-			// fetch the request data
-			requestID := envelope.CausationID()
-			if requestID == 0 {
-				logger.Error("event lacks a causation ID to locate the request")
-				break
-			}
-			request := requests[requestID]
-			if request == nil {
-				logger.Error("failed to locate request data")
-				break
-			}
-
-			// mark request as successful
-			request.attempts[event.Attempt] = state_success
-			logger.Info("completed API call")
-
-		case events.APIFailureEvent:
-			// fetch the request data
-			requestID := envelope.CausationID()
-			if requestID == 0 {
-				logger.Error("event lacks a causation ID to locate the request")
-				break
-			}
-			request := requests[requestID]
-			if request == nil {
-				logger.Error("failed to locate request event")
-				break
-			}
-
-			// mark request as failed
-			request.attempts[event.Attempt] = state_failure
-			logger.Info("failed API call")
-
-			// check if any retries remain
-			if event.Attempt == request.retries {
-				logger.Info("retries exhausted")
-				break
-			}
-
-			// If a retry for this unsuccessful attempt was already made, there
-			// is nothing to do here.
-			if event.Attempt+1 < uint(len(request.attempts)) {
-				logger.Info("retry attempt already started")
-				break
-			}
-
-			// check if a retry or a previous attempt succeeded in the meantime
-			if request.Succeeded() {
-				break
-			}
-
-			// retry event processing asynchronously
-			startApiCall(ctx, store, request.request.Event().(events.RequestEvent), request.request.ID(), event.Attempt+1)
-
-		case events.APITimeoutEvent:
-			// fetch the request data
-			requestID := envelope.CausationID()
-			if requestID == 0 {
-				logger.Error("timeout event lacks a causation ID to locate the request")
-				break
-			}
-			request := requests[requestID]
-			if request == nil {
-				logger.Error("failed to locate request event")
-				break
-			}
-
-			// A timeout event can only transition the state from "pending" to
-			// "timeout". Other states like "failure" or "success" are final.
-			if request.attempts[event.Attempt] != state_pending {
-				break
-			}
-
-			// mark request as timed out
-			request.attempts[event.Attempt] = state_timeout
-			logger.Info("API call timed out")
-
-			// check if any retries remain
-			if event.Attempt == request.retries {
-				logger.Info("retries exhausted")
-				break
-			}
-
-			// If a retry for this unsuccessful attempt was already made, there
-			// is nothing to do here.
-			if event.Attempt+1 < uint(len(request.attempts)) {
-				logger.Info("retry attempt already started")
-				break
-			}
-
-			// check if a retry or a previous attempt succeeded in the meantime
-			if request.Succeeded() {
-				break
-			}
-
-			// retry event processing asynchronously
-			startApiCall(ctx, store, request.request.Event().(events.RequestEvent), request.request.ID(), event.Attempt+1)
-		}
-	}
-
-	return store.Error()
+	return broker.ProcessRequests(ctx, store, logger, lastProcessedID)
 }
 
 // watch stream of notifications
@@ -678,7 +402,7 @@ func watchNotificationsMain() error {
 }
 
 // watch requests as they are processed
-func watchRequestsMain(startAfter string) error {
+func watchRequestsMain(lastProcessed string) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
@@ -686,170 +410,17 @@ func watchRequestsMain(startAfter string) error {
 	defer finalizeEventStore(store)
 
 	// parse optional event ID
-	var startAfterID int32
-	if startAfter != "" {
-		id, err := store.ParseEventID(startAfter)
+	var lastProcessedID int32
+	if lastProcessed != "" {
+		id, err := store.ParseEventID(lastProcessed)
 		if err != nil {
 			return err
 		}
-		startAfterID = id
+		lastProcessedID = id
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	ch, err := store.FollowEvents(ctx, startAfterID)
-	if err != nil {
-		return err
-	}
-
-	// extract summary from request state
-	// pending: API is being queried
-	// success: response received
-	// failure: request failed
-	summary := func(state *requestData) requestState {
-		// the default value is pending, which means no actual requests have been made
-		res := state_pending
-
-		for i, attempt := range state.attempts {
-			res = attempt
-			if res == state_success {
-				// first successful response makes the whole request successful
-				break
-			}
-			if i < state.retries {
-				// if there are still some attempts left, the overall result is still pending
-				res = state_pending
-			}
-		}
-		return res
-	}
-
-	// map of requests being processed currently
-	// Key is the event ID of the initial event (`RequestEvent`), which is
-	// used as causation ID in future events associated with this request.
-	requests := make(map[int32]*requestData)
-
-	// number of retries after a failed request
-	retries := uint(0)
-
-	// process events from the channel
-	for envelope := range ch {
-
-		switch event := envelope.Event().(type) {
-		case events.ConfigurationEvent:
-			if event.Retries >= 0 {
-				retries = uint(event.Retries)
-			}
-
-		case events.RequestEvent:
-			// create record to correlate the results with it
-			request := newRequestData(envelope, retries)
-			requests[envelope.ID()] = request
-
-			// create record to correlate the results with it
-			logger.Info(
-				"request received",
-				"request ID", envelope.ID(),
-				"summary", summary(request),
-			)
-
-		case events.APIRequestEvent:
-			// fetch the request data
-			requestID := envelope.CausationID()
-			if requestID == 0 {
-				logger.Error("event lacks a causation ID to locate the request")
-				break
-			}
-			request := requests[requestID]
-			if request == nil {
-				logger.Error("failed to locate request data")
-				break
-			}
-
-			// mark request as pending
-			request.attempts[event.Attempt] = state_pending
-
-			logger.Info(
-				"API request starting",
-				"request ID", envelope.CausationID(),
-				"summary", summary(request),
-				"attempt", event.Attempt,
-			)
-
-		case events.APIResponseEvent:
-			// fetch the request data
-			requestID := envelope.CausationID()
-			if requestID == 0 {
-				logger.Error("event lacks a causation ID to locate the request")
-				break
-			}
-			request := requests[requestID]
-			if request == nil {
-				logger.Error("failed to locate request data")
-				break
-			}
-
-			// mark request as successful
-			request.attempts[event.Attempt] = state_success
-
-			logger.Info(
-				"API request succeeded",
-				"request ID", envelope.CausationID(),
-				"summary", summary(request),
-				"attempt", event.Attempt,
-			)
-
-		case events.APIFailureEvent:
-			// fetch the request data
-			requestID := envelope.CausationID()
-			if requestID == 0 {
-				logger.Error("event lacks a causation ID to locate the request")
-				break
-			}
-			request := requests[requestID]
-			if request == nil {
-				logger.Error("failed to locate request data")
-				break
-			}
-
-			// mark request as failed
-			request.attempts[event.Attempt] = state_failure
-
-			logger.Info(
-				"API request failed",
-				"request ID", envelope.CausationID(),
-				"summary", summary(request),
-				"attempt", event.Attempt,
-			)
-
-		case events.APITimeoutEvent:
-			// fetch the request data
-			requestID := envelope.CausationID()
-			if requestID == 0 {
-				logger.Error("event lacks a causation ID to locate the request")
-				break
-			}
-			request := requests[requestID]
-			if request == nil {
-				logger.Error("failed to locate request data")
-				break
-			}
-
-			// A timeout event can only transition the state from "pending" to
-			// "timeout". Other states like "failure" or "success" are final.
-			if request.attempts[event.Attempt] == state_pending {
-				request.attempts[event.Attempt] = state_timeout
-			}
-
-			logger.Info(
-				"API request timeout elapsed",
-				"request ID", envelope.CausationID(),
-				"summary", summary(request),
-				"attempt", event.Attempt,
-			)
-		}
-	}
-
-	return store.Error()
+	return broker.WatchRequests(ctx, store, logger, lastProcessedID)
 }
