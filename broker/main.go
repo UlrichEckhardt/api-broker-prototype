@@ -56,7 +56,8 @@ func startApiCall(ctx context.Context, store events.EventStore, logger log15.Log
 type requestState int
 
 const (
-	state_pending requestState = iota
+	state_initial requestState = iota
+	state_pending
 	state_success
 	state_failure
 	state_timeout
@@ -64,6 +65,8 @@ const (
 
 func (d requestState) String() string {
 	switch d {
+	case state_initial:
+		return "initial"
 	case state_pending:
 		return "pending"
 	case state_success:
@@ -80,21 +83,19 @@ func (d requestState) String() string {
 // metadata for a request
 type requestData struct {
 	request  events.Envelope
-	retries  uint
-	attempts map[uint]requestState
+	attempts []requestState
 }
 
 func newRequestData(request events.Envelope, retries uint) *requestData {
 	return &requestData{
 		request:  request,
-		retries:  retries,
-		attempts: make(map[uint]requestState),
+		attempts: make([]requestState, retries+1),
 	}
 }
 
 // query the number of retries for this request
 func (request *requestData) Retries() uint {
-	return request.retries
+	return uint(len(request.attempts) - 1)
 }
 
 // query whether any attempt for the request succeeded
@@ -109,26 +110,32 @@ func (request *requestData) Succeeded() bool {
 
 // index of the next attempt
 func (request *requestData) NextAttempt() uint {
-	return uint(len(request.attempts))
+	i := uint(0)
+	for _, val := range request.attempts {
+		if val == state_initial {
+			break
+		}
+		i++
+	}
+	return i
 }
 
 // determine overall state of the request
-// pending: API is being queried
-// success: response received
-// failure: request failed
 func (request *requestData) State() requestState {
 	// the default value is pending, which means no actual requests have been made
 	res := state_pending
-
-	for i, attempt := range request.attempts {
-		res = attempt
-		if res == state_success {
-			// first successful response makes the whole request successful
-			break
-		}
-		if i < request.Retries() {
-			// if there are still some attempts left, the overall result is still pending
-			res = state_pending
+	for _, val := range request.attempts {
+		switch val {
+		case state_initial:
+			// this and further attempts are initial and don't affect the result
+			return res
+		case state_pending:
+		case state_failure:
+			// temporary state, store it but keep looking
+			res = val
+		case state_success:
+			// state is final, store it
+			return val
 		}
 	}
 	return res
