@@ -92,6 +92,11 @@ func newRequestData(request events.Envelope, retries uint) *requestData {
 	}
 }
 
+// query the number of retries for this request
+func (request *requestData) Retries() uint {
+	return request.retries
+}
+
 // query whether any attempt for the request succeeded
 func (d *requestData) Succeeded() bool {
 	for _, val := range d.attempts {
@@ -228,7 +233,7 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 			logger.Info("failed API call")
 
 			// check if any retries remain
-			if event.Attempt == request.retries {
+			if event.Attempt == request.Retries() {
 				logger.Info("retries exhausted")
 				break
 			}
@@ -272,7 +277,7 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 			logger.Info("API call timed out")
 
 			// check if any retries remain
-			if event.Attempt == request.retries {
+			if event.Attempt == request.Retries() {
 				logger.Info("retries exhausted")
 				break
 			}
@@ -308,17 +313,17 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 	// pending: API is being queried
 	// success: response received
 	// failure: request failed
-	summary := func(state *requestData) requestState {
+	summary := func(request *requestData) requestState {
 		// the default value is pending, which means no actual requests have been made
 		res := state_pending
 
-		for i, attempt := range state.attempts {
+		for i, attempt := range request.attempts {
 			res = attempt
 			if res == state_success {
 				// first successful response makes the whole request successful
 				break
 			}
-			if i < state.retries {
+			if i < request.Retries() {
 				// if there are still some attempts left, the overall result is still pending
 				res = state_pending
 			}
