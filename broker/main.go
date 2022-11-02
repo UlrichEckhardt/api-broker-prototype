@@ -112,6 +112,28 @@ func (request *requestData) NextAttempt() uint {
 	return uint(len(request.attempts))
 }
 
+// determine overall state of the request
+// pending: API is being queried
+// success: response received
+// failure: request failed
+func (request *requestData) State() requestState {
+	// the default value is pending, which means no actual requests have been made
+	res := state_pending
+
+	for i, attempt := range request.attempts {
+		res = attempt
+		if res == state_success {
+			// first successful response makes the whole request successful
+			break
+		}
+		if i < request.Retries() {
+			// if there are still some attempts left, the overall result is still pending
+			res = state_pending
+		}
+	}
+	return res
+}
+
 // ProcessRequests processes request events from the store.
 func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.Logger, lastProcessedID int32) error {
 	// wrap the actual event store with the timeout handling decorator
@@ -309,28 +331,6 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 		return err
 	}
 
-	// extract summary from request state
-	// pending: API is being queried
-	// success: response received
-	// failure: request failed
-	summary := func(request *requestData) requestState {
-		// the default value is pending, which means no actual requests have been made
-		res := state_pending
-
-		for i, attempt := range request.attempts {
-			res = attempt
-			if res == state_success {
-				// first successful response makes the whole request successful
-				break
-			}
-			if i < request.Retries() {
-				// if there are still some attempts left, the overall result is still pending
-				res = state_pending
-			}
-		}
-		return res
-	}
-
 	// map of requests being processed currently
 	// Key is the event ID of the initial event (`RequestEvent`), which is
 	// used as causation ID in future events associated with this request.
@@ -357,7 +357,7 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 			logger.Info(
 				"request received",
 				"request ID", envelope.ID(),
-				"summary", summary(request),
+				"state", request.State(),
 			)
 
 		case APIRequestEvent:
@@ -379,7 +379,7 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 			logger.Info(
 				"API request starting",
 				"request ID", envelope.CausationID(),
-				"summary", summary(request),
+				"state", request.State(),
 				"attempt", event.Attempt,
 			)
 
@@ -402,7 +402,7 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 			logger.Info(
 				"API request succeeded",
 				"request ID", envelope.CausationID(),
-				"summary", summary(request),
+				"state", request.State(),
 				"attempt", event.Attempt,
 			)
 
@@ -425,7 +425,7 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 			logger.Info(
 				"API request failed",
 				"request ID", envelope.CausationID(),
-				"summary", summary(request),
+				"state", request.State(),
 				"attempt", event.Attempt,
 			)
 
@@ -451,7 +451,7 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 			logger.Info(
 				"API request timeout elapsed",
 				"request ID", envelope.CausationID(),
-				"summary", summary(request),
+				"state", request.State(),
 				"attempt", event.Attempt,
 			)
 		}
