@@ -98,8 +98,8 @@ func (request *requestData) Retries() uint {
 }
 
 // query whether any attempt for the request succeeded
-func (d *requestData) Succeeded() bool {
-	for _, val := range d.attempts {
+func (request *requestData) Succeeded() bool {
+	for _, val := range request.attempts {
 		if val == state_success {
 			return true
 		}
