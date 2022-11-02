@@ -102,6 +102,11 @@ func (d *requestData) Succeeded() bool {
 	return false
 }
 
+// index of the next attempt
+func (request *requestData) NextAttempt() uint {
+	return uint(len(request.attempts))
+}
+
 // ProcessRequests processes request events from the store.
 func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.Logger, lastProcessedID int32) error {
 	// wrap the actual event store with the timeout handling decorator
@@ -230,7 +235,7 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 
 			// If a retry for this unsuccessful attempt was already made, there
 			// is nothing to do here.
-			if event.Attempt+1 < uint(len(request.attempts)) {
+			if event.Attempt+1 != request.NextAttempt() {
 				logger.Info("retry attempt already started")
 				break
 			}
@@ -274,7 +279,7 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 
 			// If a retry for this unsuccessful attempt was already made, there
 			// is nothing to do here.
-			if event.Attempt+1 < uint(len(request.attempts)) {
+			if event.Attempt+1 != request.NextAttempt() {
 				logger.Info("retry attempt already started")
 				break
 			}
