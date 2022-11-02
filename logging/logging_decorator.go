@@ -66,9 +66,9 @@ func (s *LoggingDecoratorEventStore) RetrieveOne(ctx context.Context, id int32) 
 	return env, err
 }
 
-func (s *LoggingDecoratorEventStore) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
-	s.logger.Debug("Loading events.", "start", start)
-	stream, err := s.eventstore.LoadEvents(ctx, start)
+func (s *LoggingDecoratorEventStore) LoadEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
+	s.logger.Debug("Loading events.", "startAfter", startAfter)
+	stream, err := s.eventstore.LoadEvents(ctx, startAfter)
 	if err != nil {
 		s.logger.Debug("Failed to load events.", "error", err)
 		return stream, err
@@ -123,9 +123,9 @@ func (s *LoggingDecoratorEventStore) FollowNotifications(ctx context.Context) (<
 	return res, nil
 }
 
-func (s *LoggingDecoratorEventStore) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
-	s.logger.Debug("Loading event stream.", "start", start)
-	stream, err := s.eventstore.FollowEvents(ctx, start)
+func (s *LoggingDecoratorEventStore) FollowEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
+	s.logger.Debug("Loading event stream.", "startAfter", startAfter)
+	stream, err := s.eventstore.FollowEvents(ctx, startAfter)
 	if err != nil {
 		s.logger.Debug("Failed to load event stream.", "error", err)
 		return stream, err

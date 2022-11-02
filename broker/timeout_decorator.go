@@ -94,8 +94,8 @@ func (d *EventStoreTimeoutDecorator) RetrieveOne(ctx context.Context, id int32) 
 }
 
 // LoadEvents implements the EventStore interface by simply forwarding.
-func (d *EventStoreTimeoutDecorator) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
-	return d.store.LoadEvents(ctx, start)
+func (d *EventStoreTimeoutDecorator) LoadEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
+	return d.store.LoadEvents(ctx, startAfter)
 }
 
 // FollowNotifications implements the EventStore interface by simply forwarding.
@@ -104,9 +104,9 @@ func (d *EventStoreTimeoutDecorator) FollowNotifications(ctx context.Context) (<
 }
 
 // FollowEvents implements the EventStore interface.
-func (d *EventStoreTimeoutDecorator) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
+func (d *EventStoreTimeoutDecorator) FollowEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
 	// forward call to the decorated event store first
-	stream, err := d.store.FollowEvents(ctx, start)
+	stream, err := d.store.FollowEvents(ctx, startAfter)
 	if err != nil {
 		return stream, err
 	}
