@@ -33,7 +33,7 @@ func (store *eventstoreMock) RetrieveOne(ctx context.Context, id int32) (events.
 	return nil, notImplemented
 }
 
-func (store *eventstoreMock) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
+func (store *eventstoreMock) LoadEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
 	return nil, notImplemented
 }
 
@@ -41,7 +41,7 @@ func (store *eventstoreMock) FollowNotifications(ctx context.Context) (<-chan ev
 	return nil, notImplemented
 }
 
-func (store *eventstoreMock) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
+func (store *eventstoreMock) FollowEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
 	return nil, notImplemented
 }
 

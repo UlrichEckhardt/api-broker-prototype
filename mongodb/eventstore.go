@@ -396,7 +396,7 @@ func (s *MongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnve
 }
 
 // LoadEvents implements the EventStore interface.
-func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
+func (s *MongoDBEventStore) LoadEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil, s.err
@@ -415,16 +415,16 @@ func (s *MongoDBEventStore) LoadEvents(ctx context.Context, start int32) (<-chan
 		}
 
 		// load the referenced start object to verify the ID is valid
-		if start != 0 {
+		if startAfter != 0 {
 			// TODO: actually handle the error here
-			ref, _ := s.RetrieveOne(ctx, start)
+			ref, _ := s.RetrieveOne(ctx, startAfter)
 			if ref == nil {
 				return
 			}
 		}
 
 		// pump events
-		id := start
+		id := startAfter
 		for {
 			// retrieve next envelope
 			envelope := s.retrieveNext(ctx, id)
@@ -492,7 +492,7 @@ func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) (<-chan eve
 }
 
 // FollowEvents implements the EventStore interface.
-func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
+func (s *MongoDBEventStore) FollowEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
 		return nil, s.err
@@ -511,9 +511,9 @@ func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) (<-ch
 		}
 
 		// load the referenced start object to verify the ID is valid
-		if start != 0 {
+		if startAfter != 0 {
 			// TODO: actually handle the error here
-			ref, _ := s.RetrieveOne(ctx, start)
+			ref, _ := s.RetrieveOne(ctx, startAfter)
 			if ref == nil {
 				return
 			}
@@ -526,7 +526,7 @@ func (s *MongoDBEventStore) FollowEvents(ctx context.Context, start int32) (<-ch
 		}
 
 		// pump events
-		id := start
+		id := startAfter
 		for {
 			// retrieve next envelope
 			envelope := s.retrieveNext(ctx, id)

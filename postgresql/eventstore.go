@@ -262,7 +262,7 @@ func (s *PostgreSQLEventStore) RetrieveOne(ctx context.Context, id int32) (event
 }
 
 // LoadEvents implements the EventStore interface.
-func (s *PostgreSQLEventStore) LoadEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
+func (s *PostgreSQLEventStore) LoadEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
 	// establish connection
 	conn := s.connect(ctx)
 	if conn == nil {
@@ -281,7 +281,7 @@ func (s *PostgreSQLEventStore) LoadEvents(ctx context.Context, start int32) (<-c
 		rows, err := conn.Query(
 			ctx,
 			`SELECT id, created, causation_id, class, payload FROM events WHERE id > $1;`,
-			start,
+			startAfter,
 		)
 		if err != nil {
 			s.err = err
@@ -376,7 +376,7 @@ func (s *PostgreSQLEventStore) FollowNotifications(ctx context.Context) (<-chan 
 }
 
 // FollowEvents implements the EventStore interface.
-func (s *PostgreSQLEventStore) FollowEvents(ctx context.Context, start int32) (<-chan events.Envelope, error) {
+func (s *PostgreSQLEventStore) FollowEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
 	// establish connection
 	conn := s.connect(ctx)
 	if conn == nil {
@@ -406,7 +406,7 @@ func (s *PostgreSQLEventStore) FollowEvents(ctx context.Context, start int32) (<
 			rows, err := conn.Query(
 				ctx,
 				`SELECT id, created, causation_id, class, payload FROM events WHERE id > $1;`,
-				start,
+				startAfter,
 			)
 			if err != nil {
 				s.err = err
@@ -447,7 +447,7 @@ func (s *PostgreSQLEventStore) FollowEvents(ctx context.Context, start int32) (<
 				}
 
 				// remember new position in stream
-				start = id
+				startAfter = id
 			}
 
 			// wait for notifications of new events
