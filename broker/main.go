@@ -267,7 +267,8 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 			}
 
 			// If a retry for this unsuccessful attempt was already made, there
-			// is nothing to do here.
+			// is nothing to do here. This happens when the timeout elapsed
+			// before the failure response was received.
 			if event.Attempt+1 != request.NextAttempt() {
 				logger.Info("retry attempt already started")
 				break
@@ -275,6 +276,7 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 
 			// check if a retry or a previous attempt succeeded in the meantime
 			if request.Succeeded() {
+				logger.Info("request already succeeded, no need for a retry")
 				break
 			}
 
@@ -311,7 +313,8 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 			}
 
 			// If a retry for this unsuccessful attempt was already made, there
-			// is nothing to do here.
+			// is nothing to do here. This happens when the failure response was
+			// received before the timeout elapsed.
 			if event.Attempt+1 != request.NextAttempt() {
 				logger.Info("retry attempt already started")
 				break
@@ -319,6 +322,7 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 
 			// check if a retry or a previous attempt succeeded in the meantime
 			if request.Succeeded() {
+				logger.Info("request already succeeded, no need for a retry")
 				break
 			}
 
