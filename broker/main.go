@@ -344,9 +344,27 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 	return store.Error()
 }
 
+// Working data for a request observer.
+//
+// The RequestWatcher observes API-related events and sends the resulting
+// status to the logger.
+type RequestWatcher struct {
+	store  events.EventStore
+	logger log15.Logger
+	// number of retries after a failed request
+	retries uint
+}
+
+func NewRequestWatcher(store events.EventStore, logger log15.Logger) (*RequestWatcher, error) {
+	return &RequestWatcher{
+		store:  store,
+		logger: logger,
+	}, nil
+}
+
 // WatchRequests watches requests as they are processed
-func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Logger, lastProcessedID int32) error {
-	ch, err := store.FollowEvents(ctx, lastProcessedID)
+func (handler *RequestWatcher) Run(ctx context.Context, lastProcessedID int32) error {
+	ch, err := handler.store.FollowEvents(ctx, lastProcessedID)
 	if err != nil {
 		return err
 	}
@@ -356,27 +374,25 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 	// used as causation ID in future events associated with this request.
 	requests := make(map[int32]*requestData)
 
-	// number of retries after a failed request
-	retries := uint(0)
-
 	// process events from the channel
 	for envelope := range ch {
 
 		switch event := envelope.Event().(type) {
 		case ConfigurationEvent:
+			// store configuration
 			if event.Retries >= 0 {
-				retries = uint(event.Retries)
+				handler.retries = uint(event.Retries)
 			}
 
 		case RequestEvent:
 			// create record to correlate the results with it
-			request := newRequestData(envelope, retries)
+			request := newRequestData(envelope, handler.retries)
 			requests[envelope.ID()] = request
 
 			// create record to correlate the results with it
-			logger.Info(
+			handler.logger.Info(
 				"request received",
-				"request ID", envelope.ID(),
+				"request ID", request.ID(),
 				"state", request.State(),
 			)
 
@@ -384,21 +400,21 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
-				logger.Error("event lacks a causation ID to locate the request")
+				handler.logger.Error("event lacks a causation ID to locate the request")
 				break
 			}
 			request := requests[requestID]
 			if request == nil {
-				logger.Error("failed to locate request data")
+				handler.logger.Error("failed to locate request data")
 				break
 			}
 
 			// mark request as pending
 			request.attempts[event.Attempt] = state_pending
 
-			logger.Info(
+			handler.logger.Info(
 				"API request starting",
-				"request ID", envelope.CausationID(),
+				"request ID", request.ID(),
 				"state", request.State(),
 				"attempt", event.Attempt,
 			)
@@ -407,21 +423,21 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
-				logger.Error("event lacks a causation ID to locate the request")
+				handler.logger.Error("event lacks a causation ID to locate the request")
 				break
 			}
 			request := requests[requestID]
 			if request == nil {
-				logger.Error("failed to locate request data")
+				handler.logger.Error("failed to locate request data")
 				break
 			}
 
 			// mark request as successful
 			request.attempts[event.Attempt] = state_success
 
-			logger.Info(
+			handler.logger.Info(
 				"API request succeeded",
-				"request ID", envelope.CausationID(),
+				"request ID", request.ID(),
 				"state", request.State(),
 				"attempt", event.Attempt,
 			)
@@ -430,21 +446,21 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
-				logger.Error("event lacks a causation ID to locate the request")
+				handler.logger.Error("event lacks a causation ID to locate the request")
 				break
 			}
 			request := requests[requestID]
 			if request == nil {
-				logger.Error("failed to locate request data")
+				handler.logger.Error("failed to locate request data")
 				break
 			}
 
 			// mark request as failed
 			request.attempts[event.Attempt] = state_failure
 
-			logger.Info(
+			handler.logger.Info(
 				"API request failed",
-				"request ID", envelope.CausationID(),
+				"request ID", request.ID(),
 				"state", request.State(),
 				"attempt", event.Attempt,
 			)
@@ -453,12 +469,12 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 			// fetch the request data
 			requestID := envelope.CausationID()
 			if requestID == 0 {
-				logger.Error("event lacks a causation ID to locate the request")
+				handler.logger.Error("event lacks a causation ID to locate the request")
 				break
 			}
 			request := requests[requestID]
 			if request == nil {
-				logger.Error("failed to locate request data")
+				handler.logger.Error("failed to locate request data")
 				break
 			}
 
@@ -468,14 +484,14 @@ func WatchRequests(ctx context.Context, store events.EventStore, logger log15.Lo
 				request.attempts[event.Attempt] = state_timeout
 			}
 
-			logger.Info(
+			handler.logger.Info(
 				"API request timeout elapsed",
-				"request ID", envelope.CausationID(),
+				"request ID", request.ID(),
 				"state", request.State(),
 				"attempt", event.Attempt,
 			)
 		}
 	}
 
-	return store.Error()
+	return handler.store.Error()
 }
