@@ -39,6 +39,17 @@ func (d requestState) String() string {
 	}
 }
 
+// convert a float value to a duration
+// The given value must be non-negative and is converted to a duration. As
+// exception, zero input gives you `nil`.
+func durationFromFloat(f float64) *time.Duration {
+	if f == 0 {
+		return nil
+	}
+	res := time.Duration(f * float64(time.Second))
+	return &res
+}
+
 // metadata for a request
 type requestData struct {
 	envelope events.Envelope
@@ -119,7 +130,7 @@ type RequestProcessor struct {
 	// number of retries after a failed request
 	retries uint
 	// maximum duration before considering an attempt failed
-	timeout time.Duration
+	timeout *time.Duration
 }
 
 func NewRequestProcessor(store events.EventStore, logger log15.Logger) (*RequestProcessor, error) {
@@ -216,7 +227,7 @@ func (handler *RequestProcessor) Run(ctx context.Context, lastProcessedID int32)
 				handler.retries = uint(event.Retries)
 			}
 			if event.Timeout >= 0 {
-				handler.timeout = time.Duration(event.Timeout * float64(time.Second))
+				handler.timeout = durationFromFloat(event.Timeout)
 			}
 			handler.logger.Info(
 				"updated API configuration",
