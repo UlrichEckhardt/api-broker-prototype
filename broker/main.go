@@ -127,10 +127,9 @@ func (request *requestData) State() requestState {
 	for _, val := range request.attempts {
 		switch val {
 		case state_initial:
-			// this and further attempts are initial and don't affect the result
-			return res
-		case state_pending:
-		case state_failure:
+			// this and further attempts are initial, so the overall state is undetermined yet
+			return state_pending
+		case state_pending, state_failure, state_timeout:
 			// temporary state, store it but keep looking
 			res = val
 		case state_success:
