@@ -54,12 +54,14 @@ func durationFromFloat(f float64) *time.Duration {
 type requestData struct {
 	envelope events.Envelope
 	attempts []requestState
+	timeout  *time.Duration
 }
 
-func newRequestData(request events.Envelope, retries uint) *requestData {
+func newRequestData(request events.Envelope, retries uint, timeout *time.Duration) *requestData {
 	return &requestData{
 		envelope: request,
 		attempts: make([]requestState, retries+1),
+		timeout:  timeout,
 	}
 }
 
@@ -76,6 +78,11 @@ func (request *requestData) ID() int32 {
 // query the number of retries for this request
 func (request *requestData) Retries() uint {
 	return uint(len(request.attempts) - 1)
+}
+
+// duration from request start to timeout
+func (request *requestData) Timeout() *time.Duration {
+	return request.timeout
 }
 
 // query whether any attempt for the request succeeded
@@ -134,14 +141,8 @@ type RequestProcessor struct {
 }
 
 func NewRequestProcessor(store events.EventStore, logger log15.Logger) (*RequestProcessor, error) {
-	// wrap the actual event store with the timeout handling decorator
-	timeoutDecorator, err := NewTimeoutEventStoreDecorator(store, logger)
-	if err != nil {
-		return nil, err
-	}
-
 	return &RequestProcessor{
-		store:  timeoutDecorator,
+		store:  store,
 		logger: logger,
 	}, nil
 }
@@ -151,6 +152,7 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 	event := request.Event()
 	causationID := request.ID()
 	attempt := request.NextAttempt()
+	timeout := request.Timeout()
 
 	// emit event that a request was started
 	handler.store.Insert(
@@ -160,6 +162,26 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 		},
 		causationID,
 	)
+
+	// if a timeout is configured, trigger async creation of a timeout event
+	// TODO: This accesses `store` asynchronously, which may need synchronization.
+	if timeout != nil {
+		time.AfterFunc(
+			*timeout,
+			func() {
+				_, err := handler.store.Insert(
+					ctx,
+					APITimeoutEvent{
+						Attempt: attempt,
+					},
+					causationID,
+				)
+				if err != nil {
+					handler.logger.Error("failed to insert timeout event", "error", err)
+				}
+			},
+		)
+	}
 
 	// TODO: this accesses `store` asynchronously, which may need synchronization
 	go func() {
@@ -239,7 +261,7 @@ func (handler *RequestProcessor) Run(ctx context.Context, lastProcessedID int32)
 			handler.logger.Info("starting request processing")
 
 			// create record to correlate the results with it
-			request := newRequestData(envelope, handler.retries)
+			request := newRequestData(envelope, handler.retries, handler.timeout)
 			requests[envelope.ID()] = request
 
 			// try event processing asynchronously
@@ -383,6 +405,8 @@ type RequestWatcher struct {
 	logger log15.Logger
 	// number of retries after a failed request
 	retries uint
+	// maximum duration before considering an attempt failed
+	timeout *time.Duration
 }
 
 func NewRequestWatcher(store events.EventStore, logger log15.Logger) (*RequestWatcher, error) {
@@ -413,10 +437,13 @@ func (handler *RequestWatcher) Run(ctx context.Context, lastProcessedID int32) e
 			if event.Retries >= 0 {
 				handler.retries = uint(event.Retries)
 			}
+			if event.Timeout >= 0 {
+				handler.timeout = durationFromFloat(event.Timeout)
+			}
 
 		case RequestEvent:
 			// create record to correlate the results with it
-			request := newRequestData(envelope, handler.retries)
+			request := newRequestData(envelope, handler.retries, handler.timeout)
 			requests[envelope.ID()] = request
 
 			// create record to correlate the results with it
