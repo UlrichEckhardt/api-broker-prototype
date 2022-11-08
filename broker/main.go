@@ -82,15 +82,25 @@ func (d requestState) String() string {
 
 // metadata for a request
 type requestData struct {
-	request  events.Envelope
+	envelope events.Envelope
 	attempts []requestState
 }
 
 func newRequestData(request events.Envelope, retries uint) *requestData {
 	return &requestData{
-		request:  request,
+		envelope: request,
 		attempts: make([]requestState, retries+1),
 	}
+}
+
+// retrieve the request event
+func (request *requestData) Event() RequestEvent {
+	return request.envelope.Event().(RequestEvent)
+}
+
+// retrieve the ID from the envelope
+func (request *requestData) ID() int32 {
+	return request.envelope.ID()
 }
 
 // query the number of retries for this request
@@ -203,7 +213,7 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 			requests[envelope.ID()] = request
 
 			// try event processing asynchronously
-			startApiCall(ctx, store, logger, event, envelope.ID(), 0)
+			startApiCall(ctx, store, logger, request.Event(), request.ID(), request.NextAttempt())
 
 		case APIRequestEvent:
 			// fetch the request data
@@ -281,7 +291,7 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 			}
 
 			// retry event processing asynchronously
-			startApiCall(ctx, store, logger, request.request.Event().(RequestEvent), request.request.ID(), event.Attempt+1)
+			startApiCall(ctx, store, logger, request.Event(), request.ID(), request.NextAttempt())
 
 		case APITimeoutEvent:
 			// fetch the request data
@@ -327,7 +337,7 @@ func ProcessRequests(ctx context.Context, store events.EventStore, logger log15.
 			}
 
 			// retry event processing asynchronously
-			startApiCall(ctx, store, logger, request.request.Event().(RequestEvent), request.request.ID(), event.Attempt+1)
+			startApiCall(ctx, store, logger, request.Event(), request.ID(), request.NextAttempt())
 		}
 	}
 

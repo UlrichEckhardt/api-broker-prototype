@@ -22,7 +22,9 @@ func (envelope envelopeMock) CausationID() int32 {
 }
 
 func (envelope envelopeMock) Event() events.Event {
-	return nil
+	return RequestEvent{
+		Request: "test request data",
+	}
 }
 
 func TestRequestData(t *testing.T) {
@@ -35,6 +37,13 @@ func TestRequestData(t *testing.T) {
 			t.Errorf("request is nil")
 		}
 
+		event := request.Event()
+		if event.Request != "test request data" {
+			t.Errorf("event data is unexpected")
+		}
+		if request.ID() != 42 {
+			t.Errorf("ID() is unexpected")
+		}
 		if len(request.attempts) != 2 {
 			t.Errorf("attempt count is unexpected")
 		}
