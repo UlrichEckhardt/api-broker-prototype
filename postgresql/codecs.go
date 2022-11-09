@@ -3,6 +3,7 @@ package postgresql
 // This file provides PostgreSQL codecs for the events defined in events.go.
 
 import (
+	"api-broker-prototype/broker"
 	"api-broker-prototype/events"
 
 	"github.com/jackc/pgtype"
@@ -54,7 +55,7 @@ func (codec *configurationEventCodec) Class() string {
 
 // Serialize implements the PostgreSQLEventCodec interface.
 func (codec *configurationEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
-	event := ev.(events.ConfigurationEvent)
+	event := ev.(broker.ConfigurationEvent)
 	res := pgtype.JSONB{}
 	err := res.Set(
 		dataRecord{
@@ -72,7 +73,7 @@ func (codec *configurationEventCodec) Serialize(ev events.Event) (pgtype.JSONB, 
 func (codec *configurationEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
 	tmp := dataRecord{}
 	err := data.AssignTo(&tmp)
-	res := events.ConfigurationEvent{
+	res := broker.ConfigurationEvent{
 		Retries: (int32)(tmp["retries"].(float64)),
 		Timeout: tmp["timeout"].(float64),
 	}
@@ -88,7 +89,7 @@ func (codec *requestEventCodec) Class() string {
 
 // Serialize implements the PostgreSQLEventCodec interface.
 func (codec *requestEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
-	event := ev.(events.RequestEvent)
+	event := ev.(broker.RequestEvent)
 	res := pgtype.JSONB{}
 	err := res.Set(
 		dataRecord{
@@ -105,7 +106,7 @@ func (codec *requestEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error)
 func (codec *requestEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
 	tmp := dataRecord{}
 	err := data.AssignTo(&tmp)
-	res := events.RequestEvent{
+	res := broker.RequestEvent{
 		Request: tmp["request"].(string),
 	}
 	return res, err
@@ -120,7 +121,7 @@ func (codec *apiRequestEventCodec) Class() string {
 
 // Serialize implements the PostgreSQLEventCodec interface.
 func (codec *apiRequestEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
-	event := ev.(events.APIRequestEvent)
+	event := ev.(broker.APIRequestEvent)
 	res := pgtype.JSONB{}
 	err := res.Set(
 		dataRecord{
@@ -137,7 +138,7 @@ func (codec *apiRequestEventCodec) Serialize(ev events.Event) (pgtype.JSONB, err
 func (codec *apiRequestEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
 	tmp := dataRecord{}
 	err := data.AssignTo(&tmp)
-	res := events.APIRequestEvent{
+	res := broker.APIRequestEvent{
 		Attempt: (uint)(tmp["attempt"].(float64)),
 	}
 	return res, err
@@ -152,7 +153,7 @@ func (codec *apiResponseEventCodec) Class() string {
 
 // Serialize implements the PostgreSQLEventCodec interface.
 func (codec *apiResponseEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
-	event := ev.(events.APIResponseEvent)
+	event := ev.(broker.APIResponseEvent)
 	res := pgtype.JSONB{}
 	err := res.Set(
 		dataRecord{
@@ -170,7 +171,7 @@ func (codec *apiResponseEventCodec) Serialize(ev events.Event) (pgtype.JSONB, er
 func (codec *apiResponseEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
 	tmp := dataRecord{}
 	err := data.AssignTo(&tmp)
-	res := events.APIResponseEvent{
+	res := broker.APIResponseEvent{
 		Attempt:  (uint)(tmp["attempt"].(float64)),
 		Response: tmp["response"].(string),
 	}
@@ -186,7 +187,7 @@ func (codec *apiFailureEventCodec) Class() string {
 
 // Serialize implements the PostgreSQLEventCodec interface.
 func (codec *apiFailureEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
-	event := ev.(events.APIFailureEvent)
+	event := ev.(broker.APIFailureEvent)
 	res := pgtype.JSONB{}
 	err := res.Set(
 		dataRecord{
@@ -204,7 +205,7 @@ func (codec *apiFailureEventCodec) Serialize(ev events.Event) (pgtype.JSONB, err
 func (codec *apiFailureEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
 	tmp := dataRecord{}
 	err := data.AssignTo(&tmp)
-	res := events.APIFailureEvent{
+	res := broker.APIFailureEvent{
 		Attempt: (uint)(tmp["attempt"].(float64)),
 		Failure: tmp["failure"].(string),
 	}
@@ -220,7 +221,7 @@ func (codec *apiTimeoutEventCodec) Class() string {
 
 // Serialize implements the PostgreSQLEventCodec interface.
 func (codec *apiTimeoutEventCodec) Serialize(ev events.Event) (pgtype.JSONB, error) {
-	event := ev.(events.APITimeoutEvent)
+	event := ev.(broker.APITimeoutEvent)
 	res := pgtype.JSONB{}
 	err := res.Set(
 		dataRecord{
@@ -237,7 +238,7 @@ func (codec *apiTimeoutEventCodec) Serialize(ev events.Event) (pgtype.JSONB, err
 func (codec *apiTimeoutEventCodec) Deserialize(data pgtype.JSONB) (events.Event, error) {
 	tmp := dataRecord{}
 	err := data.AssignTo(&tmp)
-	res := events.APITimeoutEvent{
+	res := broker.APITimeoutEvent{
 		Attempt: (uint)(tmp["attempt"].(float64)),
 	}
 	return res, err
