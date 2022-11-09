@@ -361,6 +361,11 @@ func processMain(startAfter string) error {
 	}
 	defer finalizeEventStore(store)
 
+	handler, err := broker.NewRequestProcessor(store, logger)
+	if err != nil {
+		return err
+	}
+
 	// parse optional event ID
 	var startAfterID int32
 	if startAfter != "" {
@@ -374,7 +379,7 @@ func processMain(startAfter string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	return broker.ProcessRequests(ctx, store, logger, startAfterID)
+	return handler.Run(ctx, startAfterID)
 }
 
 // watch stream of notifications
@@ -409,6 +414,11 @@ func watchRequestsMain(startAfter string) error {
 	}
 	defer finalizeEventStore(store)
 
+	handler, err := broker.NewRequestWatcher(store, logger)
+	if err != nil {
+		return err
+	}
+
 	// parse optional event ID
 	var startAfterID int32
 	if startAfter != "" {
@@ -422,5 +432,5 @@ func watchRequestsMain(startAfter string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	return broker.WatchRequests(ctx, store, logger, startAfterID)
+	return handler.Run(ctx, startAfterID)
 }

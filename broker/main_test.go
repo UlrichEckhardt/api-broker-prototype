@@ -22,24 +22,37 @@ func (envelope envelopeMock) CausationID() int32 {
 }
 
 func (envelope envelopeMock) Event() events.Event {
-	return nil
+	return RequestEvent{
+		Request: "test request data",
+	}
 }
 
 func TestRequestData(t *testing.T) {
 	envelope := envelopeMock{}
 	retries := uint(1)
+	timeout := time.Second
 
 	t.Run("initial state", func(t *testing.T) {
-		request := newRequestData(envelope, retries)
+		request := newRequestData(envelope, retries, &timeout)
 		if request == nil {
 			t.Errorf("request is nil")
 		}
 
+		event := request.Event()
+		if event.Request != "test request data" {
+			t.Errorf("event data is unexpected")
+		}
+		if request.ID() != 42 {
+			t.Errorf("ID() is unexpected")
+		}
 		if len(request.attempts) != 2 {
 			t.Errorf("attempt count is unexpected")
 		}
 		if request.Retries() != retries {
 			t.Errorf("Retries() is unexpected")
+		}
+		if request.Timeout() != &timeout {
+			t.Errorf("Timeout() is unexpected")
 		}
 		if request.Succeeded() {
 			t.Errorf("Succeeded() is unexpected")
@@ -53,7 +66,7 @@ func TestRequestData(t *testing.T) {
 	})
 
 	t.Run("first pending", func(t *testing.T) {
-		request := newRequestData(envelope, retries)
+		request := newRequestData(envelope, retries, &timeout)
 		if request == nil {
 			t.Errorf("request is nil")
 		}
@@ -72,7 +85,7 @@ func TestRequestData(t *testing.T) {
 	})
 
 	t.Run("first success", func(t *testing.T) {
-		request := newRequestData(envelope, retries)
+		request := newRequestData(envelope, retries, &timeout)
 		if request == nil {
 			t.Errorf("request is nil")
 		}
@@ -91,7 +104,7 @@ func TestRequestData(t *testing.T) {
 	})
 
 	t.Run("first failure", func(t *testing.T) {
-		request := newRequestData(envelope, retries)
+		request := newRequestData(envelope, retries, &timeout)
 		if request == nil {
 			t.Errorf("request is nil")
 		}
@@ -110,7 +123,7 @@ func TestRequestData(t *testing.T) {
 	})
 
 	t.Run("first timeout", func(t *testing.T) {
-		request := newRequestData(envelope, retries)
+		request := newRequestData(envelope, retries, &timeout)
 		if request == nil {
 			t.Errorf("request is nil")
 		}
@@ -129,7 +142,7 @@ func TestRequestData(t *testing.T) {
 	})
 
 	t.Run("second success", func(t *testing.T) {
-		request := newRequestData(envelope, retries)
+		request := newRequestData(envelope, retries, &timeout)
 		if request == nil {
 			t.Errorf("request is nil")
 		}
@@ -149,7 +162,7 @@ func TestRequestData(t *testing.T) {
 	})
 
 	t.Run("second failure", func(t *testing.T) {
-		request := newRequestData(envelope, retries)
+		request := newRequestData(envelope, retries, &timeout)
 		if request == nil {
 			t.Errorf("request is nil")
 		}
@@ -169,7 +182,7 @@ func TestRequestData(t *testing.T) {
 	})
 
 	t.Run("second timeout", func(t *testing.T) {
-		request := newRequestData(envelope, retries)
+		request := newRequestData(envelope, retries, &timeout)
 		if request == nil {
 			t.Errorf("request is nil")
 		}
