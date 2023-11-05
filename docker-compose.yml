@@ -22,6 +22,9 @@ services:
       - type: bind
         source: ./docker-compose.d/setup-mongodb-event-store.sh
         target: /docker-entrypoint-initdb.d/setup-event-store.sh
+      - type: volume
+        source: mongodb-data
+        target: /data/db
 
   postgresql:
     image: postgres:13.8
@@ -36,3 +39,6 @@ services:
       - type: bind
         source: ./docker-compose.d/setup-postgresql-event-store.sh
         target: /docker-entrypoint-initdb.d/setup-event-store.sh
+
+volumes:
+  mongodb-data:
