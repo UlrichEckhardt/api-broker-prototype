@@ -123,6 +123,27 @@ services:
     profiles:
       - postgresql-storage
 
+  traefik:
+    image: traefik:2.10
+    command:
+      # turn off data exfiltration
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      # web UI / dashboard
+      - "--api.insecure=true"
+      # configuration
+      - "--log.level=DEBUG"
+      - "--providers.docker=true"
+    ports:
+      - 80:80
+      # web UI at http://traefik.docker.localhost:8080
+      # (enabled by --api.insecure=true)
+      - 8080:8080
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+
 volumes:
   mongodb-data:
   postgresql-data:
