@@ -41,24 +41,30 @@ The following points are explicitly not goals:
 
 ### Running things using docker compose
 
+- Choose the storage backend, MongoDB or PostgreSQL. To keep it simple, just put
+  `COMPOSE_PROFILES=mongodb-storage` in the .env file for now.
 - Start the setup using `docker compose up --build --detach`.
-- Configure the broker using e.g. `docker compose run broker configure --retries 2`.
+- Configure the broker using `docker compose run mongodb-broker configure --retries 2`.
   In addition to configuring the broker, it creates an event in the MongoDB
   collection. This is necessary, because you can't wait on an empty capped
-  collection. This is a bug (IMHO) in MongoDB and some people even reported
-  it as such.
-- Start the event processor using `docker compose run broker process`. You can
-  adjust the simulated behaviour of the API using various parameters there.
+  collection. This is a known bug in MongoDB.
+- Start the event processor using `docker compose run mongodb-broker process`.
+  You can adjust the simulated behaviour of the API using various parameters there.
   This will keep running in the foreground.
-- In order to simulate a call, `docker compose run broker insert request "test"`.
+- In order to simulate a call, `docker compose run mongodb-broker insert request "test"`.
 - You should now be able to see the event processor simulating an API call,
   storing the resulting info in the event store.
-- Using `docker compose run broker list`, you can get a list of all events and
+- Using `docker compose run mongodb-broker list`, you can get a list of all events and
   their contents.
 - Finally, you can kill the event processor and shut down the whole setup
-  using `docker compose rm --stop --force`.
+  using `docker compose down`.
+- In order to purge the collected events, too, run `docker compose down --volumes`.
 
 ### Switching the storage backend
+
+To `docker compose`, switching is configured using different profiles.
+Instead of putting it into the `.env` file, you can also invoke `docker compose`
+with a `--profile` flag on every invocation.
 
 There are two storage backends implemented, one based on MongoDB (the default),
 the other on PostgreSQL. In their use, they shouldn't be different. You can
@@ -72,20 +78,6 @@ switch using
 - Environment variable `EVENTSTORE_DB_HOST=postgresql|mongodb`
   Since the setup uses the "host" network, you can also use "localhost", which
   is also the default.
-
-### Configuring using overrides with docker compose
-
-You can create a file docker-compose.override.yml which is automatically used
-as overlay for for the existing setup. You can use that to e.g. switch the
-used eventstore and DB host:
-
-```yaml
-services:
-  broker:
-    environment:
-      - EVENTSTORE_DRIVER=postgresql
-      - EVENTSTORE_DB_HOST=postgresql
-```
 
 ## Diagnostics
 
