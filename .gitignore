@@ -7,5 +7,5 @@ vendor/
 # built executable
 api-broker-prototype
 
-# local overrides for docker-compose
+# local overrides for docker-compose.yml
 docker-compose.override.yml
