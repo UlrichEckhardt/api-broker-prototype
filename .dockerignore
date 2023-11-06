@@ -7,9 +7,12 @@
 # Docker files
 Dockerfile
 .dockerignore
-
 docker-compose.yml
 docker-compose.d/
+.env
+
+# documentation
+README.md
 
 #
 # Everything below is just a copy of .gitignore
