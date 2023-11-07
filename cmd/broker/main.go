@@ -7,6 +7,7 @@ import (
 	"api-broker-prototype/logging"
 	"api-broker-prototype/mongodb"
 	"api-broker-prototype/postgresql"
+	"api-broker-prototype/rest-api" // imports as package rest_api
 	"context"
 	"errors"
 	"os"
@@ -178,6 +179,24 @@ func main() {
 						return err
 					}
 					return resolveExternalUUIDMain(c.Context, externalUUID)
+				},
+			},
+			{
+				Name:      "serve-rest-api",
+				Usage:     "Run a REST API.",
+				ArgsUsage: " ",
+				Flags: []cli.Flag{
+					&cli.UintFlag{
+						Name:  "port",
+						Value: 80,
+						Usage: "port where to serve the API",
+					},
+				},
+				Action: func(c *cli.Context) error {
+					if c.NArg() > 0 {
+						return errors.New("no arguments expected")
+					}
+					return serveRESTAPIMain(c.Context, c.Uint("port"))
 				},
 			},
 			{
@@ -421,6 +440,17 @@ func resolveExternalUUIDMain(ctx context.Context, externalUUID uuid.UUID) error 
 	logger.Info("resolved UUID", "id", id)
 
 	return store.Error()
+}
+
+// Run a REST API
+func serveRESTAPIMain(ctx context.Context, port uint) error {
+	store, err := initEventStore()
+	if err != nil {
+		return err
+	}
+	defer finalizeEventStore(store)
+
+	return rest_api.Serve(ctx, store, port)
 }
 
 // watch stream of notifications
