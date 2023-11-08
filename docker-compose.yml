@@ -3,13 +3,16 @@ version: '3.6'
 services:
   # Note: The broker doesn't start as a service here, it just runs the broker
   # executable once. This is rather a placeholder than an actual service.
-  broker:
+  mongodb-broker:
     build: .
     depends_on:
       mongodb:
         condition: service_healthy
-      postgresql:
-        condition: service_healthy
+    environment:
+      - EVENTSTORE_DRIVER=mongodb
+      - EVENTSTORE_DB_HOST=mongodb
+    profiles:
+      - mongodb-storage
 
   mongodb:
     image: mongo:4.4
@@ -22,6 +25,24 @@ services:
       - type: bind
         source: ./docker-compose.d/setup-mongodb-event-store.sh
         target: /docker-entrypoint-initdb.d/setup-event-store.sh
+      - type: volume
+        source: mongodb-data
+        target: /data/db
+    profiles:
+      - mongodb-storage
+
+  # Note: The broker doesn't start as a service here, it just runs the broker
+  # executable once. This is rather a placeholder than an actual service.
+  postgresql-broker:
+    build: .
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    environment:
+      - EVENTSTORE_DRIVER=postgresql
+      - EVENTSTORE_DB_HOST=postgresql
+    profiles:
+      - postgresql-storage
 
   postgresql:
     image: postgres:13.8
@@ -36,3 +57,12 @@ services:
       - type: bind
         source: ./docker-compose.d/setup-postgresql-event-store.sh
         target: /docker-entrypoint-initdb.d/setup-event-store.sh
+      - type: volume
+        source: postgresql-data
+        target: /var/lib/postgresql/data
+    profiles:
+      - postgresql-storage
+
+volumes:
+  mongodb-data:
+  postgresql-data:

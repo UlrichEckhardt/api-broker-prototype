@@ -7,9 +7,12 @@
 # Docker files
 Dockerfile
 .dockerignore
-
 docker-compose.yml
 docker-compose.d/
+.env
+
+# documentation
+README.md
 
 #
 # Everything below is just a copy of .gitignore
@@ -24,5 +27,5 @@ vendor/
 # built executable
 api-broker-prototype
 
-# local overrides for docker-compose
+# local overrides for docker-compose.yml
 docker-compose.override.yml
