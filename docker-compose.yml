@@ -53,6 +53,26 @@ services:
       - traefik.tcp.routers.mongodb.rule=HostSNI(`*`)
       - traefik.tcp.routers.mongodb.entrypoints=mongodb
 
+  mongodb-api:
+    build: .
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    command:
+      - serve-rest-api
+    environment:
+      - EVENTSTORE_DRIVER=mongodb
+      - EVENTSTORE_DB_HOST=mongodb
+    ports:
+      - 80
+    profiles:
+      - mongodb-storage
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.mongodb-broker.entrypoints=web
+      - traefik.http.routers.mongodb-broker.rule=Host(`api.docker.localhost`)
+      - traefik.http.services.mongodb-broker.loadbalancer.server.port=80
+
   mongodb-processor:
     build:
       context: .
@@ -126,6 +146,26 @@ services:
       - traefik.tcp.routers.postgresql.rule=HostSNI(`*`)
       - traefik.tcp.routers.postgresql.entrypoints=postgresql
 
+  postgresql-api:
+    build: .
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    command:
+      - serve-rest-api
+    environment:
+      - EVENTSTORE_DRIVER=postgresql
+      - EVENTSTORE_DB_HOST=postgresql
+    ports:
+      - 80
+    profiles:
+      - postgresql-storage
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.postgresql-broker.entrypoints=web
+      - traefik.http.routers.postgresql-broker.rule=Host(`api.docker.localhost`)
+      - traefik.http.services.postgresql-broker.loadbalancer.server.port=80
+
   postgresql-processor:
     build:
       context: .
@@ -172,6 +212,8 @@ services:
       - --entrypoints.mongodb.address=:27017
       # define PostgreSQL entrypoint
       - --entrypoints.postgresql.address=:5432
+      # define web entrypoint
+      - --entrypoints.web.address=:80
     ports:
       - 80:80
       # web UI at http://traefik.docker.localhost:8080
