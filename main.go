@@ -27,6 +27,7 @@ func main() {
 	logger = log15.New("context", "main")
 	logger.SetHandler(log15.StdoutHandler)
 
+	// setup CLI handler
 	app := cli.App{
 		Name:  "api-broker-prototype",
 		Usage: "prototype for an event-sourcing inspired API binding",
@@ -74,7 +75,7 @@ func main() {
 					if c.NArg() > 0 {
 						return errors.New("no arguments expected")
 					}
-					return configureMain(c.Int("retries"), c.Float64("timeout"))
+					return configureMain(c.Context, c.Int("retries"), c.Float64("timeout"))
 				},
 			},
 			{
@@ -93,7 +94,7 @@ func main() {
 					if args.Len() != 2 {
 						return errors.New("exactly two arguments expected")
 					}
-					return insertMain(args.Get(0), args.Get(1), c.String("causation"))
+					return insertMain(c.Context, args.Get(0), args.Get(1), c.String("causation"))
 				},
 			},
 			{
@@ -112,7 +113,7 @@ func main() {
 						return errors.New("no arguments expected")
 					}
 
-					return listMain(c.String("start-after"))
+					return listMain(c.Context, c.String("start-after"))
 				},
 			},
 			{
@@ -152,7 +153,7 @@ func main() {
 					}
 					configureAPIStub(c)
 
-					return processMain(c.String("start-after"))
+					return processMain(c.Context, c.String("start-after"))
 				},
 			},
 			{
@@ -164,7 +165,7 @@ func main() {
 						return errors.New("no arguments expected")
 					}
 
-					return watchNotificationsMain()
+					return watchNotificationsMain(c.Context)
 				},
 			},
 			{
@@ -183,13 +184,14 @@ func main() {
 						return errors.New("no arguments expected")
 					}
 
-					return watchRequestsMain(c.String("start-after"))
+					return watchRequestsMain(c.Context, c.String("start-after"))
 				},
 			},
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	// run the actual commandline application
+	if err := app.RunContext(context.Background(), os.Args); err != nil {
 		logger.Debug("command exited with error", "error", err)
 		return
 	}
@@ -246,15 +248,12 @@ func finalizeEventStore(store events.EventStore) {
 }
 
 // insert a configuration event
-func configureMain(retries int, timeout float64) error {
+func configureMain(ctx context.Context, retries int, timeout float64) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
 	}
 	defer finalizeEventStore(store)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	event := broker.ConfigurationEvent{
 		Retries: int32(retries),
@@ -271,15 +270,12 @@ func configureMain(retries int, timeout float64) error {
 }
 
 // insert a new event
-func insertMain(class string, data string, causation string) error {
+func insertMain(ctx context.Context, class string, data string, causation string) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
 	}
 	defer finalizeEventStore(store)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// create the event from the commandline arguments
 	var event events.Event
@@ -313,7 +309,7 @@ func insertMain(class string, data string, causation string) error {
 }
 
 // list existing elements
-func listMain(lastProcessed string) error {
+func listMain(ctx context.Context, lastProcessed string) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
@@ -329,9 +325,6 @@ func listMain(lastProcessed string) error {
 		}
 		lastProcessedID = id
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	ch, err := store.LoadEvents(ctx, lastProcessedID)
 	if err != nil {
@@ -354,7 +347,7 @@ func listMain(lastProcessed string) error {
 }
 
 // process existing elements
-func processMain(startAfter string) error {
+func processMain(ctx context.Context, startAfter string) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
@@ -376,22 +369,16 @@ func processMain(startAfter string) error {
 		startAfterID = id
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	return handler.Run(ctx, startAfterID)
 }
 
 // watch stream of notifications
-func watchNotificationsMain() error {
+func watchNotificationsMain(ctx context.Context) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
 	}
 	defer finalizeEventStore(store)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	ch, err := store.FollowNotifications(ctx)
 	if err != nil {
@@ -407,7 +394,7 @@ func watchNotificationsMain() error {
 }
 
 // watch requests as they are processed
-func watchRequestsMain(startAfter string) error {
+func watchRequestsMain(ctx context.Context, startAfter string) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
@@ -428,9 +415,6 @@ func watchRequestsMain(startAfter string) error {
 		}
 		startAfterID = id
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	return handler.Run(ctx, startAfterID)
 }
