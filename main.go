@@ -9,10 +9,13 @@ import (
 	"api-broker-prototype/postgresql"
 	"context"
 	"errors"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/inconshreveable/log15"
 	"github.com/urfave/cli/v2" // imports as package "cli"
-	"os"
-	"time"
 )
 
 var (
@@ -190,8 +193,24 @@ func main() {
 		},
 	}
 
+	// setup a context for coordinated shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// launch background call to monitor e.g. keyboard interrupts (Control-C)
+	// to terminate the application
+	go func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
+		sig := <-ch
+		logger.Info("received OS signal, terminating", "signal", sig)
+
+		// trigger cancellation
+		cancel()
+	}()
+
 	// run the actual commandline application
-	if err := app.RunContext(context.Background(), os.Args); err != nil {
+	if err := app.RunContext(ctx, os.Args); err != nil {
 		logger.Debug("command exited with error", "error", err)
 		return
 	}
