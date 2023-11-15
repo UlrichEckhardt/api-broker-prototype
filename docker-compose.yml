@@ -31,6 +31,23 @@ services:
     profiles:
       - mongodb-storage
 
+  mongodb-processor:
+    build: .
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    command:
+      - process
+      - --api-failure-rate=0.5
+      - --api-silent-failure-rate=0.3
+      - --api-min-latency=1
+      - --api-max-latency=3
+    environment:
+      - EVENTSTORE_DRIVER=mongodb
+      - EVENTSTORE_DB_HOST=mongodb
+    profiles:
+      - mongodb-storage
+
   # Note: The broker doesn't start as a service here, it just runs the broker
   # executable once. This is rather a placeholder than an actual service.
   postgresql-broker:
@@ -60,6 +77,23 @@ services:
       - type: volume
         source: postgresql-data
         target: /var/lib/postgresql/data
+    profiles:
+      - postgresql-storage
+
+  postgresql-processor:
+    build: .
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    command:
+      - process
+      - --api-failure-rate=0.5
+      - --api-silent-failure-rate=0.3
+      - --api-min-latency=1
+      - --api-max-latency=3
+    environment:
+      - EVENTSTORE_DRIVER=postgresql
+      - EVENTSTORE_DB_HOST=postgresql
     profiles:
       - postgresql-storage
 
