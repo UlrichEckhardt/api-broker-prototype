@@ -48,6 +48,19 @@ services:
     profiles:
       - mongodb-storage
 
+  mongodb-watcher:
+    build: .
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    command:
+      - watch-requests
+    environment:
+      - EVENTSTORE_DRIVER=mongodb
+      - EVENTSTORE_DB_HOST=mongodb
+    profiles:
+      - mongodb-storage
+
   # Note: The broker doesn't start as a service here, it just runs the broker
   # executable once. This is rather a placeholder than an actual service.
   postgresql-broker:
@@ -91,6 +104,19 @@ services:
       - --api-silent-failure-rate=0.3
       - --api-min-latency=1
       - --api-max-latency=3
+    environment:
+      - EVENTSTORE_DRIVER=postgresql
+      - EVENTSTORE_DB_HOST=postgresql
+    profiles:
+      - postgresql-storage
+
+  postgresql-watcher:
+    build: .
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    command:
+      - watch-requests
     environment:
       - EVENTSTORE_DRIVER=postgresql
       - EVENTSTORE_DB_HOST=postgresql
