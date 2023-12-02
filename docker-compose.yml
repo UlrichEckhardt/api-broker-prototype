@@ -30,6 +30,9 @@ services:
         target: /data/db
     profiles:
       - mongodb-storage
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.mongodb.rule=Host(`mongodb.docker.localhost`)
 
   mongodb-processor:
     build: .
@@ -92,6 +95,9 @@ services:
         target: /var/lib/postgresql/data
     profiles:
       - postgresql-storage
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.postgresql.rule=Host(`postgresql.docker.localhost`)
 
   postgresql-processor:
     build: .
