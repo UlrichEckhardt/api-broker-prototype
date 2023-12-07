@@ -46,19 +46,21 @@ type MongoDBEventCodec interface {
 
 // mongoDBRawEnvelope is the type representing the envelope in MongoDB
 type mongoDBRawEnvelope struct {
-	ID          int32              `bson:"_id"`
-	Created     primitive.DateTime `bson:"created"`
-	CausationID int32              `bson:"causation_id"`
-	Class       string             `bson:"class"`
-	Data        bson.M             `bson:"data"`
+	ID              int32              `bson:"_id"`
+	ExternalUUIDVal *uuid.UUID         `bson:"external_uuid"`
+	Created         primitive.DateTime `bson:"created"`
+	CausationID     int32              `bson:"causation_id"`
+	Class           string             `bson:"class"`
+	Data            bson.M             `bson:"data"`
 }
 
 // mongoDBEnvelope implements the Envelope interface.
 type mongoDBEnvelope struct {
-	IDVal          int32
-	CreatedVal     primitive.DateTime
-	CausationIDVal int32
-	EventVal       events.Event
+	IDVal           int32
+	ExternalUUIDVal uuid.UUID
+	CreatedVal      primitive.DateTime
+	CausationIDVal  int32
+	EventVal        events.Event
 }
 
 // ID implements the Envelope interface.
@@ -73,8 +75,7 @@ func (env *mongoDBEnvelope) Created() time.Time {
 
 // ExternalUUID implements the Envelope interface.
 func (env *mongoDBEnvelope) ExternalUUID() uuid.UUID {
-	// TODO: implement UUID support
-	return uuid.Nil
+	return env.ExternalUUIDVal
 }
 
 // CausationID implements the Envelope interface.
@@ -201,11 +202,6 @@ func (s *MongoDBEventStore) Close() error {
 
 // Insert implements the EventStore interface.
 func (s *MongoDBEventStore) Insert(ctx context.Context, externalUUID uuid.UUID, event events.Event, causationID int32) (events.Envelope, error) {
-	// TODO: implement UUID support
-	if externalUUID != uuid.Nil {
-		return nil, errors.New("UUID support not implemented")
-	}
-
 	// don't do anything if the error state of the store is set already
 	s.connect(ctx)
 	if s.err != nil {
@@ -226,9 +222,10 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, externalUUID uuid.UUID, 
 	}
 
 	env := mongoDBRawEnvelope{
-		CausationID: causationID,
-		Class:       class,
-		Data:        payload,
+		ExternalUUIDVal: uuidAsDBValue(externalUUID),
+		CausationID:     causationID,
+		Class:           class,
+		Data:            payload,
 	}
 
 	// generate an ID
@@ -281,17 +278,61 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, externalUUID uuid.UUID, 
 	}
 
 	res := &mongoDBEnvelope{
-		IDVal:      env.ID,
-		CreatedVal: env.Created,
-		EventVal:   event,
+		IDVal:           env.ID,
+		ExternalUUIDVal: dbValueAsUUID(env.ExternalUUIDVal),
+		CreatedVal:      env.Created,
+		CausationIDVal:  env.CausationID,
+		EventVal:        event,
 	}
 	return res, nil
 }
 
+// convert UUID to a parameter for the DB
+// We write nil UUID as `null`, so that the index ignores the value.
+// All internal events have a nil external UUID, because they don't need
+// idempotent insert operations, but we also don't want those to be flagged
+// as duplicate values.
+func uuidAsDBValue(val uuid.UUID) *uuid.UUID {
+	if val == uuid.Nil {
+		return nil
+	}
+
+	return &val
+}
+
+// convert response from the DB to UUID
+// See `uuidAsDBValue()`.
+func dbValueAsUUID(val *uuid.UUID) uuid.UUID {
+	if val == nil {
+		return uuid.Nil
+	}
+
+	return *val
+}
+
 // ResolveUUID implements the EventStore interface.
 func (s *MongoDBEventStore) ResolveUUID(ctx context.Context, externalUUID uuid.UUID) (int32, error) {
-	// TODO: implement UUID support
-	return 0, errors.New("UUID support not implemented")
+	if externalUUID == uuid.Nil {
+		return 0, errors.New("provided external UUID is null")
+	}
+
+	// don't do anything if the error state of the store is set already
+	if s.err != nil {
+		return 0, s.err
+	}
+
+	// retrieve the document from the DB
+	filter := bson.M{"external_uuid": bson.M{"$eq": externalUUID}}
+	res := s.events.FindOne(ctx, filter)
+	if res.Err() == mongo.ErrNoDocuments {
+		return 0, errors.New("document not found")
+	}
+	if res.Err() != nil {
+		s.err = res.Err()
+		return 0, s.err
+	}
+
+	return int32(s.decodeEnvelope(res).ID()), s.err
 }
 
 // find next free ID to use for an insert
@@ -402,10 +443,11 @@ func (s *MongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnve
 	}
 
 	return &mongoDBEnvelope{
-		IDVal:          envelope.ID,
-		CreatedVal:     envelope.Created,
-		CausationIDVal: envelope.CausationID,
-		EventVal:       event,
+		IDVal:           envelope.ID,
+		ExternalUUIDVal: dbValueAsUUID(envelope.ExternalUUIDVal),
+		CreatedVal:      envelope.Created,
+		CausationIDVal:  envelope.CausationID,
+		EventVal:        event,
 	}
 }
 
