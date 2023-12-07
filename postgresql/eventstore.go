@@ -9,10 +9,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgtype"
-	"github.com/jackc/pgx/v4"
 	"strconv"
 	"time"
+
+	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
