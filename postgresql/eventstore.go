@@ -40,10 +40,11 @@ type PostgreSQLEventCodec interface {
 
 // postgreSQLEnvelope implements the Envelope interface.
 type postgreSQLEnvelope struct {
-	IDVal          int32
-	CreatedVal     time.Time
-	CausationIDVal int32
-	EventVal       events.Event
+	IDVal           int32
+	ExternalUUIDVal *uuid.UUID
+	CreatedVal      time.Time
+	CausationIDVal  int32
+	EventVal        events.Event
 }
 
 // ID implements the Envelope interface.
@@ -58,8 +59,10 @@ func (env *postgreSQLEnvelope) Created() time.Time {
 
 // ExternalUUID implements the Envelope interface.
 func (env *postgreSQLEnvelope) ExternalUUID() uuid.UUID {
-	// TODO: implement UUID support
-	return uuid.Nil
+	if env.ExternalUUIDVal == nil {
+		return uuid.Nil
+	}
+	return *env.ExternalUUIDVal
 }
 
 // CausationID implements the Envelope interface.
@@ -186,11 +189,6 @@ func (s *PostgreSQLEventStore) Close() error {
 
 // Insert implements the EventStore interface.
 func (s *PostgreSQLEventStore) Insert(ctx context.Context, externalUUID uuid.UUID, event events.Event, causationID int32) (events.Envelope, error) {
-	// TODO: implement UUID support
-	if externalUUID != uuid.Nil {
-		return nil, errors.New("UUID support not implemented")
-	}
-
 	// locate codec for the event class
 	class := event.Class()
 	codec := s.codecs[class]
@@ -211,23 +209,24 @@ func (s *PostgreSQLEventStore) Insert(ctx context.Context, externalUUID uuid.UUI
 	}
 	defer conn.Close(ctx)
 
+	// init envelope with input values
+	res := postgreSQLEnvelope{
+		ExternalUUIDVal: uuidAsDBValue(externalUUID),
+		CreatedVal:      time.Now(),
+		CausationIDVal:  causationID,
+		EventVal:        event,
+	}
+
 	// insert the event into the DB
-	now := time.Now()
 	row := conn.QueryRow(
 		ctx,
-		`INSERT INTO events (created, causation_id, class, payload) VALUES ($1, $2, $3, $4) RETURNING id;`,
-		now,
-		causationID,
+		`INSERT INTO events (external_uuid, created, causation_id, class, payload) VALUES ($1, $2, $3, $4, $5) RETURNING id;`,
+		res.ExternalUUIDVal,
+		res.CreatedVal,
+		res.CausationIDVal,
 		class,
 		payload,
 	)
-
-	// init envelope with input values
-	res := postgreSQLEnvelope{
-		CreatedVal:     now,
-		CausationIDVal: causationID,
-		EventVal:       event,
-	}
 
 	// retrieve assigned ID from response
 	if err = row.Scan(&res.IDVal); err != nil {
@@ -238,10 +237,46 @@ func (s *PostgreSQLEventStore) Insert(ctx context.Context, externalUUID uuid.UUI
 	return &res, nil
 }
 
+// convert UUID to a parameter for the DB
+// We write nil UUID as `NULL`, so that the `UNIQUE` constraint is ignored.
+// All internal events have a nil external UUID, because they don't need
+// idempotent insert operations, but we also don't want those to be flagged
+// as duplicate values.
+func uuidAsDBValue(val uuid.UUID) *uuid.UUID {
+	if val == uuid.Nil {
+		return nil
+	}
+
+	return &val
+}
+
 // ResolveUUID implements the EventStore interface.
 func (s *PostgreSQLEventStore) ResolveUUID(ctx context.Context, externalUUID uuid.UUID) (int32, error) {
-	// TODO: implement UUID support
-	return 0, errors.New("UUID support not implemented")
+	if externalUUID == uuid.Nil {
+		return 0, errors.New("provided external UUID is null")
+	}
+
+	// establish connection
+	conn := s.connect(ctx)
+	if conn == nil {
+		return 0, s.err
+	}
+	defer conn.Close(ctx)
+
+	// retrieve row from DB
+	row := conn.QueryRow(
+		ctx,
+		`SELECT id FROM events WHERE external_uuid = $1;`,
+		externalUUID,
+	)
+
+	// extract field from response
+	var id int32
+	if err := row.Scan(&id); err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
 
 // RetrieveOne implements the EventStore interface.
@@ -261,7 +296,7 @@ func (s *PostgreSQLEventStore) RetrieveOne(ctx context.Context, id int32) (event
 	// retrieve row from DB
 	row := conn.QueryRow(
 		ctx,
-		`SELECT created, causation_id, class, payload FROM events WHERE id = $1;`,
+		`SELECT external_uuid, created, causation_id, class, payload FROM events WHERE id = $1;`,
 		id,
 	)
 
@@ -271,7 +306,7 @@ func (s *PostgreSQLEventStore) RetrieveOne(ctx context.Context, id int32) (event
 	}
 	var class string
 	var payload pgtype.JSONB
-	if err := row.Scan(&res.CreatedVal, &res.CausationIDVal, &class, &payload); err != nil {
+	if err := row.Scan(&res.ExternalUUIDVal, &res.CreatedVal, &res.CausationIDVal, &class, &payload); err != nil {
 		return nil, err
 	}
 
@@ -303,7 +338,7 @@ func (s *PostgreSQLEventStore) LoadEvents(ctx context.Context, startAfter int32)
 		// retrieve rows from DB
 		rows, err := conn.Query(
 			ctx,
-			`SELECT id, created, causation_id, class, payload FROM events WHERE id > $1;`,
+			`SELECT id, external_uuid, created, causation_id, class, payload FROM events WHERE id > $1;`,
 			startAfter,
 		)
 		if err != nil {
@@ -316,7 +351,7 @@ func (s *PostgreSQLEventStore) LoadEvents(ctx context.Context, startAfter int32)
 			var res postgreSQLEnvelope
 			var class string
 			var payload pgtype.JSONB
-			if err := rows.Scan(&res.IDVal, &res.CreatedVal, &res.CausationIDVal, &class, &payload); err != nil {
+			if err := rows.Scan(&res.IDVal, &res.ExternalUUIDVal, &res.CreatedVal, &res.CausationIDVal, &class, &payload); err != nil {
 				s.err = err
 				return
 			}
@@ -415,7 +450,7 @@ func (s *PostgreSQLEventStore) FollowEvents(ctx context.Context, startAfter int3
 			// retrieve rows from DB
 			rows, err := conn.Query(
 				ctx,
-				`SELECT id, created, causation_id, class, payload FROM events WHERE id > $1;`,
+				`SELECT id, external_uuid, created, causation_id, class, payload FROM events WHERE id > $1;`,
 				startAfter,
 			)
 			if err != nil {
@@ -428,7 +463,7 @@ func (s *PostgreSQLEventStore) FollowEvents(ctx context.Context, startAfter int3
 				var res postgreSQLEnvelope
 				var class string
 				var payload pgtype.JSONB
-				if err := rows.Scan(&res.IDVal, &res.CreatedVal, &res.CausationIDVal, &class, &payload); err != nil {
+				if err := rows.Scan(&res.IDVal, &res.ExternalUUIDVal, &res.CreatedVal, &res.CausationIDVal, &class, &payload); err != nil {
 					s.err = err
 					return
 				}
