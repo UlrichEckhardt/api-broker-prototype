@@ -9,6 +9,8 @@ import (
 	"api-broker-prototype/events"
 	"context"
 	"errors"
+
+	"github.com/gofrs/uuid"
 	"github.com/inconshreveable/log15"
 )
 
@@ -44,9 +46,9 @@ func (s *LoggingDecoratorEventStore) Close() error {
 	return s.eventstore.Close()
 }
 
-func (s *LoggingDecoratorEventStore) Insert(ctx context.Context, event events.Event, causationID int32) (events.Envelope, error) {
-	s.logger.Debug("Inserting event.", "class", event.Class(), "causation_id", causationID)
-	env, err := s.eventstore.Insert(ctx, event, causationID)
+func (s *LoggingDecoratorEventStore) Insert(ctx context.Context, externalUUID uuid.UUID, event events.Event, causationID int32) (events.Envelope, error) {
+	s.logger.Debug("Inserting event.", "external_id", externalUUID, "class", event.Class(), "causation_id", causationID)
+	env, err := s.eventstore.Insert(ctx, externalUUID, event, causationID)
 	if err == nil {
 		s.logger.Debug("Inserted event.", "id", env.ID())
 	} else {
@@ -55,11 +57,15 @@ func (s *LoggingDecoratorEventStore) Insert(ctx context.Context, event events.Ev
 	return env, err
 }
 
+func (s *LoggingDecoratorEventStore) ResolveUUID(ctx context.Context, externalUUID uuid.UUID) (int32, error) {
+	return s.eventstore.ResolveUUID(ctx, externalUUID)
+}
+
 func (s *LoggingDecoratorEventStore) RetrieveOne(ctx context.Context, id int32) (events.Envelope, error) {
 	s.logger.Debug("Loading event.", "id", id)
 	env, err := s.eventstore.RetrieveOne(ctx, id)
 	if err == nil {
-		s.logger.Debug("Loaded event.", "class", env.Event().Class(), "causation_id", env.CausationID(), "created", env.Created())
+		s.logger.Debug("Loaded event.", "external_id", env.ExternalUUID(), "class", env.Event().Class(), "causation_id", env.CausationID(), "created", env.Created())
 	} else {
 		s.logger.Debug("Failed to load event.", "error", err)
 	}
@@ -142,6 +148,7 @@ func (s *LoggingDecoratorEventStore) FollowEvents(ctx context.Context, startAfte
 			s.logger.Debug(
 				"Loaded event.",
 				"id", env.ID(),
+				"external_id", env.ExternalUUID(),
 				"class", env.Event().Class(),
 				"causation_id", env.CausationID(),
 				"created", env.Created(),

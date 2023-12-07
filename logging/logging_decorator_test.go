@@ -4,8 +4,10 @@ import (
 	"api-broker-prototype/events"
 	"context"
 	"errors"
-	"github.com/inconshreveable/log15"
 	"testing"
+
+	"github.com/gofrs/uuid"
+	"github.com/inconshreveable/log15"
 )
 
 var notImplemented error = errors.New("not implemented")
@@ -25,8 +27,12 @@ func (store *eventstoreMock) Close() error {
 	return notImplemented
 }
 
-func (store *eventstoreMock) Insert(ctx context.Context, event events.Event, causationID int32) (events.Envelope, error) {
+func (store *eventstoreMock) Insert(ctx context.Context, externalUUID uuid.UUID, event events.Event, causationID int32) (events.Envelope, error) {
 	return nil, notImplemented
+}
+
+func (store *eventstoreMock) ResolveUUID(ctx context.Context, externalUUID uuid.UUID) (int32, error) {
+	return 0, notImplemented
 }
 
 func (store *eventstoreMock) RetrieveOne(ctx context.Context, id int32) (events.Envelope, error) {
@@ -140,12 +146,36 @@ func TestInsert(t *testing.T) {
 
 	ctx := context.Background()
 
+	externalUUID, err := uuid.NewV4()
+	if err != nil {
+		t.Errorf("failed to generate UUID")
+	}
+
 	event := eventMock{}
 
-	res, err := decorator.Insert(ctx, &event, 0)
+	res, err := decorator.Insert(ctx, externalUUID, &event, 0)
 
 	if res != nil {
 		t.Errorf("expected nil as result")
+	}
+	if err != notImplemented {
+		t.Errorf("unexpected error")
+	}
+}
+
+func TestResolveUUID(t *testing.T) {
+	decorator := createMock()
+
+	ctx := context.Background()
+
+	externalUUID, err := uuid.NewV4()
+	if err != nil {
+		t.Errorf("failed to generate UUID")
+	}
+
+	res, err := decorator.ResolveUUID(ctx, externalUUID)
+	if res != 0 {
+		t.Errorf("expected zero as result")
 	}
 	if err != notImplemented {
 		t.Errorf("unexpected error")
