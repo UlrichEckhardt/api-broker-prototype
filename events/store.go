@@ -14,6 +14,8 @@ package events
 import (
 	"context"
 	"time"
+
+	"github.com/gofrs/uuid"
 )
 
 // The Envelope is a container for the actual event, which it carries as
@@ -24,6 +26,8 @@ type Envelope interface {
 	ID() int32
 	// Created returns the time the event was persisted.
 	Created() time.Time
+	// ExternalUUID returns the (optional) UUID assigned to the event
+	ExternalUUID() uuid.UUID
 	// CausationID returns the ID of the event that caused this event.
 	// This can be zero if this event was not caused by another event.
 	CausationID() int32
@@ -56,9 +60,15 @@ type EventStore interface {
 
 	// Insert an event as payload into the store.
 	// The event is wrapped in an envelope and returned.
+	// The external UUID can be used to attach a client-supplied identifier
+	// to the event. If the UUID is not the nil UUID, it must be unique.
+	// If the UUID is already used, DuplicateEventUUID is returned as error.
 	// The causation ID is that of the preceding event that caused this new
 	// event. It can be zero when its cause is not a preceding event.
-	Insert(ctx context.Context, event Event, causationID int32) (Envelope, error)
+	Insert(ctx context.Context, externalUUID uuid.UUID, event Event, causationID int32) (Envelope, error)
+
+	// Resolve an external UUID to the according internal ID
+	ResolveUUID(ctx context.Context, externalUUID uuid.UUID) (int32, error)
 
 	// Retrieve just the event with the given ID.
 	RetrieveOne(ctx context.Context, id int32) (Envelope, error)
