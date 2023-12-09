@@ -6,6 +6,7 @@ require (
 	github.com/gofrs/uuid v4.0.0+incompatible
 	github.com/inconshreveable/log15 v2.16.0+incompatible
 	github.com/jackc/pgtype v1.14.0
+	github.com/jackc/pgx-gofrs-uuid v0.0.0-20230224015001-1d428863c2e2
 	github.com/jackc/pgx/v5 v5.5.1
 	github.com/urfave/cli/v2 v2.27.1
 	go.mongodb.org/mongo-driver v1.13.1
@@ -14,6 +15,7 @@ require (
 require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
+	github.com/gofrs/uuid/v5 v5.0.0 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/jackc/pgconn v1.14.1 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
