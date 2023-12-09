@@ -14,6 +14,7 @@ import (
 
 	"github.com/gofrs/uuid"
 	"github.com/jackc/pgtype"
+	pgxuuid "github.com/jackc/pgx-gofrs-uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -111,6 +112,9 @@ func (s *PostgreSQLEventStore) connect(ctx context.Context) *pgx.Conn {
 		s.err = err
 		return nil
 	}
+
+	pgxuuid.Register(conn.TypeMap())
+
 	return conn
 }
 
