@@ -21,6 +21,8 @@ services:
       interval: 10s
       timeout: 2s
       retries: 1
+    ports:
+      - 27017/tcp
     volumes:
       - type: bind
         source: ./docker-compose.d/setup-mongodb-event-store.sh
@@ -31,8 +33,11 @@ services:
     profiles:
       - mongodb-storage
     labels:
+      # Note: For Traefik, the router must have at least one rule, therefore
+      # the dummy catch-all `HostSNI()` rule.
       - traefik.enable=true
-      - traefik.http.routers.mongodb.rule=Host(`mongodb.docker.localhost`)
+      - traefik.tcp.routers.mongodb.rule=HostSNI(`*`)
+      - traefik.tcp.routers.mongodb.entrypoints=mongodb
 
   mongodb-processor:
     build: .
@@ -86,6 +91,8 @@ services:
       interval: 10s
       timeout: 2s
       retries: 1
+    ports:
+      - 5432/tcp
     volumes:
       - type: bind
         source: ./docker-compose.d/setup-postgresql-event-store.sh
@@ -96,8 +103,11 @@ services:
     profiles:
       - postgresql-storage
     labels:
+      # Note: For Traefik, the router must have at least one rule, therefore
+      # the dummy catch-all `HostSNI()` rule.
       - traefik.enable=true
-      - traefik.http.routers.postgresql.rule=Host(`postgresql.docker.localhost`)
+      - traefik.tcp.routers.postgresql.rule=HostSNI(`*`)
+      - traefik.tcp.routers.postgresql.entrypoints=postgresql
 
   postgresql-processor:
     build: .
@@ -140,11 +150,19 @@ services:
       # configuration
       - "--log.level=DEBUG"
       - "--providers.docker=true"
+      # define MongoDB entrypoint
+      - --entrypoints.mongodb.address=:27017
+      # define PostgreSQL entrypoint
+      - --entrypoints.postgresql.address=:5432
     ports:
       - 80:80
       # web UI at http://traefik.docker.localhost:8080
       # (enabled by --api.insecure=true)
       - 8080:8080
+      # expose MongoDB port
+      - 27017:27017/tcp
+      # expose PostgreSQL port
+      - 5432:5432/tcp
     volumes:
       - type: bind
         source: /var/run/docker.sock
