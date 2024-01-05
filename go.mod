@@ -5,9 +5,9 @@ go 1.21
 require (
 	github.com/inconshreveable/log15 v2.16.0+incompatible
 	github.com/jackc/pgtype v1.14.0
-	github.com/jackc/pgx/v5 v5.5.0
-	github.com/urfave/cli/v2 v2.26.0
-	go.mongodb.org/mongo-driver v1.13.0
+	github.com/jackc/pgx/v5 v5.5.1
+	github.com/urfave/cli/v2 v2.27.1
+	go.mongodb.org/mongo-driver v1.13.1
 )
 
 require (
@@ -27,11 +27,11 @@ require (
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
-	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
+	github.com/xrash/smetrics v0.0.0-20231213231151-1d8dd44e695e // indirect
 	github.com/youmark/pkcs8 v0.0.0-20201027041543-1326539a0a0a // indirect
-	golang.org/x/crypto v0.16.0 // indirect
-	golang.org/x/sync v0.5.0 // indirect
-	golang.org/x/sys v0.15.0 // indirect
-	golang.org/x/term v0.15.0 // indirect
+	golang.org/x/crypto v0.17.0 // indirect
+	golang.org/x/sync v0.6.0 // indirect
+	golang.org/x/sys v0.16.0 // indirect
+	golang.org/x/term v0.16.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 )
