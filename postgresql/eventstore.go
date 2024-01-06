@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgtype"
 	pgxuuid "github.com/jackc/pgx-gofrs-uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const (
@@ -230,6 +231,13 @@ func (s *PostgreSQLEventStore) Insert(ctx context.Context, externalUUID uuid.UUI
 
 	// retrieve assigned ID from response
 	if err = row.Scan(&res.IDVal); err != nil {
+		switch err := err.(type) {
+		case *pgconn.PgError:
+			// check whether the reason is a duplicate UUID
+			if err.Code == "23505" && err.ConstraintName == "events_external_uuid_key" {
+				return nil, events.DuplicateEventUUID
+			}
+		}
 		// unable to insert into the 'messages' table.
 		return nil, err
 	}
