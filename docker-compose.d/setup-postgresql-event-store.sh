@@ -12,9 +12,9 @@ psql -U postgres --no-readline --echo-all --echo-hidden --expanded <<EOF
 CREATE TABLE events (
     id SERIAL PRIMARY KEY,
     created timestamp NOT NULL,
-    causation_id INTEGER,
-    class TEXT,
-    payload JSONB
+    causation_id INTEGER NOT NULL,
+    class TEXT NOT NULL,
+    payload JSONB NOT NULL
 );
 CREATE FUNCTION emit_notification ()
     RETURNS TRIGGER

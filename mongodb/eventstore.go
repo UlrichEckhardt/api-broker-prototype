@@ -91,6 +91,7 @@ func (note *mongoDBNotification) ID() int32 {
 
 // MongoDBEventStore implements the EventStore interface using a MongoDB.
 type MongoDBEventStore struct {
+	host          string
 	events        *mongo.Collection
 	notifications *mongo.Collection
 	err           error
@@ -98,67 +99,60 @@ type MongoDBEventStore struct {
 }
 
 // Connect to the two collections in the DB
-func connect(host string) (*mongo.Collection, *mongo.Collection, error) {
+
+// connect establishes an on-demand connection to the DB
+func (s *MongoDBEventStore) connect(ctx context.Context) {
+	// do nothing if state is already establish
+	if s.events != nil || s.err != nil {
+		return
+	}
+
 	opts := options.
 		Client().
-		ApplyURI("mongodb://" + host).
+		ApplyURI("mongodb://" + s.host).
 		SetAppName(AppName).SetConnectTimeout(1 * time.Second)
-	err := opts.Validate()
-	if err != nil {
-		return nil, nil, err
+	if err := opts.Validate(); err != nil {
+		s.err = err
+		return
 	}
 
-	client, err := mongo.NewClient(opts)
+	client, err := mongo.Connect(ctx, opts)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
-	if err := client.Connect(ctx); err != nil {
-		return nil, nil, err
+		s.err = err
+		return
 	}
 
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
-		return nil, nil, err
+		s.err = err
+		return
 	}
 
 	db := client.Database(DBName)
-	events := db.Collection(EventCollectionName)
-	notifications := db.Collection(NotificationCollectionName)
-
-	return events, notifications, nil
+	s.events = db.Collection(EventCollectionName)
+	s.notifications = db.Collection(NotificationCollectionName)
 }
 
 // NewEventStore creates and connects a MongoDBEventStore instance.
 func NewEventStore(host string) (*MongoDBEventStore, error) {
 	s := MongoDBEventStore{
+		host:   host,
 		codecs: make(map[string]MongoDBEventCodec),
 	}
 
-	// initialize collections
-	events, notifications, err := connect(host)
-	if err != nil {
-		return nil, err
-	}
-	s.events = events
-	s.notifications = notifications
-
 	// register codecs
-	s.RegisterCodec(&configurationEventCodec{})
-	s.RegisterCodec(&simpleEventCodec{})
-	s.RegisterCodec(&requestEventCodec{})
-	s.RegisterCodec(&apiRequestEventCodec{})
-	s.RegisterCodec(&apiResponseEventCodec{})
-	s.RegisterCodec(&apiFailureEventCodec{})
-	s.RegisterCodec(&apiTimeoutEventCodec{})
+	s.registerCodec(&configurationEventCodec{})
+	s.registerCodec(&simpleEventCodec{})
+	s.registerCodec(&requestEventCodec{})
+	s.registerCodec(&apiRequestEventCodec{})
+	s.registerCodec(&apiResponseEventCodec{})
+	s.registerCodec(&apiFailureEventCodec{})
+	s.registerCodec(&apiTimeoutEventCodec{})
 
 	return &s, nil
 }
 
-// RegisterCodec registers a codec that allows conversion of Events.
-func (s *MongoDBEventStore) RegisterCodec(codec MongoDBEventCodec) {
+// registerCodec registers a codec that allows conversion of Events.
+func (s *MongoDBEventStore) registerCodec(codec MongoDBEventCodec) {
 	if codec == nil {
 		s.err = errors.New("nil codec registered")
 		return
@@ -180,7 +174,7 @@ func (s *MongoDBEventStore) Error() error {
 	return s.err
 }
 
-// Error implements the EventStore and io.Closer interfaces.
+// Close implements the EventStore and io.Closer interfaces.
 func (s *MongoDBEventStore) Close() error {
 	// don't do anything if the error state of the store is set already
 	if s.err != nil {
@@ -200,6 +194,7 @@ func (s *MongoDBEventStore) Close() error {
 // Insert implements the EventStore interface.
 func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, causationID int32) (events.Envelope, error) {
 	// don't do anything if the error state of the store is set already
+	s.connect(ctx)
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -285,7 +280,6 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, caus
 func (s *MongoDBEventStore) findNextID(ctx context.Context) int32 {
 	// find the event with the highest ID
 	opts := options.FindOne().
-		SetBatchSize(1).
 		SetProjection(bson.M{"_id": 1}).
 		SetSort(bson.M{"_id": -1})
 	res := s.events.FindOne(ctx, bson.M{}, opts)
@@ -311,6 +305,7 @@ func (s *MongoDBEventStore) findNextID(ctx context.Context) int32 {
 // RetrieveOne implements the EventStore interface.
 func (s *MongoDBEventStore) RetrieveOne(ctx context.Context, id int32) (events.Envelope, error) {
 	// don't do anything if the error state of the store is set already
+	s.connect(ctx)
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -398,6 +393,7 @@ func (s *MongoDBEventStore) decodeEnvelope(raw *mongo.SingleResult) *mongoDBEnve
 // LoadEvents implements the EventStore interface.
 func (s *MongoDBEventStore) LoadEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
 	// don't do anything if the error state of the store is set already
+	s.connect(ctx)
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -450,6 +446,7 @@ func (s *MongoDBEventStore) LoadEvents(ctx context.Context, startAfter int32) (<
 // FollowNotifications implements the EventStore interface.
 func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) (<-chan events.Notification, error) {
 	// don't do anything if the error state of the store is set already
+	s.connect(ctx)
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -494,6 +491,7 @@ func (s *MongoDBEventStore) FollowNotifications(ctx context.Context) (<-chan eve
 // FollowEvents implements the EventStore interface.
 func (s *MongoDBEventStore) FollowEvents(ctx context.Context, startAfter int32) (<-chan events.Envelope, error) {
 	// don't do anything if the error state of the store is set already
+	s.connect(ctx)
 	if s.err != nil {
 		return nil, s.err
 	}

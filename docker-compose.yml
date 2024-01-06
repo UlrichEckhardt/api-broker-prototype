@@ -21,6 +21,8 @@ services:
       interval: 10s
       timeout: 2s
       retries: 1
+    ports:
+      - 27017/tcp
     volumes:
       - type: bind
         source: ./docker-compose.d/setup-mongodb-event-store.sh
@@ -28,6 +30,42 @@ services:
       - type: volume
         source: mongodb-data
         target: /data/db
+    profiles:
+      - mongodb-storage
+    labels:
+      # Note: For Traefik, the router must have at least one rule, therefore
+      # the dummy catch-all `HostSNI()` rule.
+      - traefik.enable=true
+      - traefik.tcp.routers.mongodb.rule=HostSNI(`*`)
+      - traefik.tcp.routers.mongodb.entrypoints=mongodb
+
+  mongodb-processor:
+    build: .
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    command:
+      - process
+      - --api-failure-rate=0.5
+      - --api-silent-failure-rate=0.3
+      - --api-min-latency=1
+      - --api-max-latency=3
+    environment:
+      - EVENTSTORE_DRIVER=mongodb
+      - EVENTSTORE_DB_HOST=mongodb
+    profiles:
+      - mongodb-storage
+
+  mongodb-watcher:
+    build: .
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    command:
+      - watch-requests
+    environment:
+      - EVENTSTORE_DRIVER=mongodb
+      - EVENTSTORE_DB_HOST=mongodb
     profiles:
       - mongodb-storage
 
@@ -53,6 +91,8 @@ services:
       interval: 10s
       timeout: 2s
       retries: 1
+    ports:
+      - 5432/tcp
     volumes:
       - type: bind
         source: ./docker-compose.d/setup-postgresql-event-store.sh
@@ -62,6 +102,71 @@ services:
         target: /var/lib/postgresql/data
     profiles:
       - postgresql-storage
+    labels:
+      # Note: For Traefik, the router must have at least one rule, therefore
+      # the dummy catch-all `HostSNI()` rule.
+      - traefik.enable=true
+      - traefik.tcp.routers.postgresql.rule=HostSNI(`*`)
+      - traefik.tcp.routers.postgresql.entrypoints=postgresql
+
+  postgresql-processor:
+    build: .
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    command:
+      - process
+      - --api-failure-rate=0.5
+      - --api-silent-failure-rate=0.3
+      - --api-min-latency=1
+      - --api-max-latency=3
+    environment:
+      - EVENTSTORE_DRIVER=postgresql
+      - EVENTSTORE_DB_HOST=postgresql
+    profiles:
+      - postgresql-storage
+
+  postgresql-watcher:
+    build: .
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    command:
+      - watch-requests
+    environment:
+      - EVENTSTORE_DRIVER=postgresql
+      - EVENTSTORE_DB_HOST=postgresql
+    profiles:
+      - postgresql-storage
+
+  traefik:
+    image: traefik:2.10
+    command:
+      # turn off data exfiltration
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      # web UI / dashboard
+      - "--api.insecure=true"
+      # configuration
+      - "--log.level=DEBUG"
+      - "--providers.docker=true"
+      # define MongoDB entrypoint
+      - --entrypoints.mongodb.address=:27017
+      # define PostgreSQL entrypoint
+      - --entrypoints.postgresql.address=:5432
+    ports:
+      - 80:80
+      # web UI at http://traefik.docker.localhost:8080
+      # (enabled by --api.insecure=true)
+      - 8080:8080
+      # expose MongoDB port
+      - 27017:27017/tcp
+      # expose PostgreSQL port
+      - 5432:5432/tcp
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
 
 volumes:
   mongodb-data:

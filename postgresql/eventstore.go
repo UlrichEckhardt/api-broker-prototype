@@ -9,10 +9,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgtype"
-	"github.com/jackc/pgx/v4"
 	"strconv"
 	"time"
+
+	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -135,6 +136,18 @@ func (s *PostgreSQLEventStore) registerCodec(codec PostgreSQLEventCodec) {
 	s.codecs[codec.Class()] = codec
 }
 
+// decode event from the class name and JSON data
+func (s *PostgreSQLEventStore) decodeEvent(class string, payload pgtype.JSONB) (events.Event, error) {
+	// locate codec for the event class
+	codec := s.codecs[class]
+	if codec == nil {
+		return nil, errors.New("failed to locate codec for event")
+	}
+
+	// decode event from storage
+	return codec.Deserialize(payload)
+}
+
 // ParseEventID implements the EventStore interface.
 func (s *PostgreSQLEventStore) ParseEventID(str string) (int32, error) {
 	lp, err := strconv.ParseInt(str, 10, 32)
@@ -193,21 +206,20 @@ func (s *PostgreSQLEventStore) Insert(ctx context.Context, event events.Event, c
 		payload,
 	)
 
-	// retrieve assigned ID from response
-	var id int32
-	if err = row.Scan(&id); err != nil {
-		// unable to insert into the 'messages' table.
-		return nil, err
-	}
-
-	res := &postgreSQLEnvelope{
-		IDVal:          id,
+	// init envelope with input values
+	res := postgreSQLEnvelope{
 		CreatedVal:     now,
 		CausationIDVal: causationID,
 		EventVal:       event,
 	}
 
-	return res, nil
+	// retrieve assigned ID from response
+	if err = row.Scan(&res.IDVal); err != nil {
+		// unable to insert into the 'messages' table.
+		return nil, err
+	}
+
+	return &res, nil
 }
 
 // RetrieveOne implements the EventStore interface.
@@ -232,33 +244,22 @@ func (s *PostgreSQLEventStore) RetrieveOne(ctx context.Context, id int32) (event
 	)
 
 	// extract fields from response
-	var created time.Time
-	var causationID int32
+	res := postgreSQLEnvelope{
+		IDVal: id,
+	}
 	var class string
 	var payload pgtype.JSONB
-	if err := row.Scan(&created, &causationID, &class, &payload); err != nil {
+	if err := row.Scan(&res.CreatedVal, &res.CausationIDVal, &class, &payload); err != nil {
 		return nil, err
 	}
 
-	// locate codec for the event class
-	codec := s.codecs[class]
-	if codec == nil {
-		return nil, errors.New("failed to locate codec for event")
-	}
-
-	// decode event from storage
-	event, err := codec.Deserialize(payload)
-	if err != nil {
+	// decode event
+	if ev, err := s.decodeEvent(class, payload); err != nil {
 		return nil, err
+	} else {
+		res.EventVal = ev
+		return &res, nil
 	}
-
-	res := &postgreSQLEnvelope{
-		IDVal:          id,
-		CreatedVal:     created,
-		CausationIDVal: causationID,
-		EventVal:       event,
-	}
-	return res, nil
 }
 
 // LoadEvents implements the EventStore interface.
@@ -290,36 +291,23 @@ func (s *PostgreSQLEventStore) LoadEvents(ctx context.Context, startAfter int32)
 
 		for rows.Next() {
 			// extract fields from response
-			var id int32
-			var created time.Time
-			var causationID int32
+			var res postgreSQLEnvelope
 			var class string
 			var payload pgtype.JSONB
-			if err := rows.Scan(&id, &created, &causationID, &class, &payload); err != nil {
+			if err := rows.Scan(&res.IDVal, &res.CreatedVal, &res.CausationIDVal, &class, &payload); err != nil {
 				s.err = err
 				return
 			}
 
-			// locate codec for the event class
-			codec := s.codecs[class]
-			if codec == nil {
-				s.err = errors.New("failed to locate codec for event")
-				return
-			}
-
-			// decode event from storage
-			event, err := codec.Deserialize(payload)
-			if err != nil {
+			// decode event
+			if ev, err := s.decodeEvent(class, payload); err != nil {
 				s.err = err
 				return
+			} else {
+				res.EventVal = ev
 			}
 
-			out <- &postgreSQLEnvelope{
-				IDVal:          id,
-				CreatedVal:     created,
-				CausationIDVal: causationID,
-				EventVal:       event,
-			}
+			out <- &res
 		}
 	}()
 
@@ -415,39 +403,26 @@ func (s *PostgreSQLEventStore) FollowEvents(ctx context.Context, startAfter int3
 
 			for rows.Next() {
 				// extract fields from response
-				var id int32
-				var created time.Time
-				var causationID int32
+				var res postgreSQLEnvelope
 				var class string
 				var payload pgtype.JSONB
-				if err := rows.Scan(&id, &created, &causationID, &class, &payload); err != nil {
+				if err := rows.Scan(&res.IDVal, &res.CreatedVal, &res.CausationIDVal, &class, &payload); err != nil {
 					s.err = err
 					return
 				}
 
-				// locate codec for the event class
-				codec := s.codecs[class]
-				if codec == nil {
-					s.err = errors.New("failed to locate codec for event")
-					return
-				}
-
-				// decode event from storage
-				event, err := codec.Deserialize(payload)
-				if err != nil {
+				// decode event
+				if ev, err := s.decodeEvent(class, payload); err != nil {
 					s.err = err
 					return
+				} else {
+					res.EventVal = ev
 				}
 
-				out <- &postgreSQLEnvelope{
-					IDVal:          id,
-					CreatedVal:     created,
-					CausationIDVal: causationID,
-					EventVal:       event,
-				}
+				out <- &res
 
 				// remember new position in stream
-				startAfter = id
+				startAfter = res.IDVal
 			}
 
 			// wait for notifications of new events
