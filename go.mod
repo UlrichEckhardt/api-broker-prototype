@@ -3,6 +3,7 @@ module api-broker-prototype
 go 1.21
 
 require (
+	github.com/gofrs/uuid v4.0.0+incompatible
 	github.com/inconshreveable/log15 v2.16.0+incompatible
 	github.com/jackc/pgtype v1.14.0
 	github.com/jackc/pgx/v5 v5.5.1

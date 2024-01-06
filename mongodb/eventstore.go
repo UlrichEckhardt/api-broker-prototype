@@ -12,6 +12,8 @@ import (
 	"api-broker-prototype/events"
 	"context"
 	"errors"
+
+	"github.com/gofrs/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -67,6 +69,12 @@ func (env *mongoDBEnvelope) ID() int32 {
 // Created implements the Envelope interface.
 func (env *mongoDBEnvelope) Created() time.Time {
 	return env.CreatedVal.Time()
+}
+
+// ExternalUUID implements the Envelope interface.
+func (env *mongoDBEnvelope) ExternalUUID() uuid.UUID {
+	// TODO: implement UUID support
+	return uuid.Nil
 }
 
 // CausationID implements the Envelope interface.
@@ -192,7 +200,12 @@ func (s *MongoDBEventStore) Close() error {
 }
 
 // Insert implements the EventStore interface.
-func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, causationID int32) (events.Envelope, error) {
+func (s *MongoDBEventStore) Insert(ctx context.Context, externalUUID uuid.UUID, event events.Event, causationID int32) (events.Envelope, error) {
+	// TODO: implement UUID support
+	if externalUUID != uuid.Nil {
+		return nil, errors.New("UUID support not implemented")
+	}
+
 	// don't do anything if the error state of the store is set already
 	s.connect(ctx)
 	if s.err != nil {
@@ -273,6 +286,12 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, event events.Event, caus
 		EventVal:   event,
 	}
 	return res, nil
+}
+
+// ResolveUUID implements the EventStore interface.
+func (s *MongoDBEventStore) ResolveUUID(ctx context.Context, externalUUID uuid.UUID) (int32, error) {
+	// TODO: implement UUID support
+	return 0, errors.New("UUID support not implemented")
 }
 
 // find next free ID to use for an insert

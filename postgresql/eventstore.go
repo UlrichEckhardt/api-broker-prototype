@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gofrs/uuid"
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v5"
 )
@@ -52,6 +53,12 @@ func (env *postgreSQLEnvelope) ID() int32 {
 // Created implements the EventStore interface.
 func (env *postgreSQLEnvelope) Created() time.Time {
 	return env.CreatedVal
+}
+
+// ExternalUUID implements the Envelope interface.
+func (env *postgreSQLEnvelope) ExternalUUID() uuid.UUID {
+	// TODO: implement UUID support
+	return uuid.Nil
 }
 
 // CausationID implements the EventStore interface.
@@ -174,7 +181,12 @@ func (s *PostgreSQLEventStore) Close() error {
 }
 
 // Insert implements the EventStore interface.
-func (s *PostgreSQLEventStore) Insert(ctx context.Context, event events.Event, causationID int32) (events.Envelope, error) {
+func (s *PostgreSQLEventStore) Insert(ctx context.Context, externalUUID uuid.UUID, event events.Event, causationID int32) (events.Envelope, error) {
+	// TODO: implement UUID support
+	if externalUUID != uuid.Nil {
+		return nil, errors.New("UUID support not implemented")
+	}
+
 	// locate codec for the event class
 	class := event.Class()
 	codec := s.codecs[class]
@@ -220,6 +232,12 @@ func (s *PostgreSQLEventStore) Insert(ctx context.Context, event events.Event, c
 	}
 
 	return &res, nil
+}
+
+// ResolveUUID implements the EventStore interface.
+func (s *PostgreSQLEventStore) ResolveUUID(ctx context.Context, externalUUID uuid.UUID) (int32, error) {
+	// TODO: implement UUID support
+	return 0, errors.New("UUID support not implemented")
 }
 
 // RetrieveOne implements the EventStore interface.

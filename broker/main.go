@@ -6,6 +6,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/gofrs/uuid"
 	"github.com/inconshreveable/log15"
 )
 
@@ -157,6 +158,7 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 	// emit event that a request was started
 	handler.store.Insert(
 		ctx,
+		uuid.Nil,
 		APIRequestEvent{
 			Attempt: attempt,
 		},
@@ -171,6 +173,7 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 			func() {
 				_, err := handler.store.Insert(
 					ctx,
+					uuid.Nil,
 					APITimeoutEvent{
 						Attempt: attempt,
 					},
@@ -192,6 +195,7 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 		if response != nil {
 			handler.store.Insert(
 				ctx,
+				uuid.Nil,
 				APIResponseEvent{
 					Attempt:  attempt,
 					Response: *response,
@@ -201,6 +205,7 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 		} else if err != nil {
 			handler.store.Insert(
 				ctx,
+				uuid.Nil,
 				APIFailureEvent{
 					Attempt: attempt,
 					Failure: err.Error(),

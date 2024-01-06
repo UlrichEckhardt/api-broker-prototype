@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/gofrs/uuid"
 	"github.com/inconshreveable/log15"
 	"github.com/urfave/cli/v2" // imports as package "cli"
 )
@@ -62,6 +63,11 @@ func main() {
 				Usage:     "Insert a configuration event into the store.",
 				ArgsUsage: " ",
 				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "external-uuid",
+						Value: "",
+						Usage: "external identifier for the request",
+					},
 					&cli.IntFlag{
 						Name:  "retries",
 						Value: -1,
@@ -77,7 +83,11 @@ func main() {
 					if c.NArg() > 0 {
 						return errors.New("no arguments expected")
 					}
-					return configureMain(c.Context, c.Int("retries"), c.Float64("timeout"))
+					externalUUID, err := parseUUID(c.String("external-uuid"))
+					if err != nil {
+						return err
+					}
+					return configureMain(c.Context, externalUUID, c.Int("retries"), c.Float64("timeout"))
 				},
 			},
 			{
@@ -85,6 +95,11 @@ func main() {
 				Usage:     "Insert an event into the store.",
 				ArgsUsage: "<event>",
 				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "external-uuid",
+						Value: "",
+						Usage: "external identifier for the request",
+					},
 					&cli.StringFlag{
 						Name:  "causation",
 						Value: "0",
@@ -96,7 +111,11 @@ func main() {
 					if args.Len() != 2 {
 						return errors.New("exactly two arguments expected")
 					}
-					return insertMain(c.Context, args.Get(0), args.Get(1), c.String("causation"))
+					externalUUID, err := parseUUID(c.String("external-uuid"))
+					if err != nil {
+						return err
+					}
+					return insertMain(c.Context, args.Get(0), args.Get(1), externalUUID, c.String("causation"))
 				},
 			},
 			{
@@ -203,6 +222,17 @@ func main() {
 	}
 }
 
+// parse a string to a UUID
+// Only a malformed string creates an error, an empty one will return a
+// nil UUID value.
+func parseUUID(arg string) (uuid.UUID, error) {
+	if arg == "" {
+		return uuid.Nil, nil
+	}
+
+	return uuid.FromString(arg)
+}
+
 // configure mock API from optional flags passed on the commandline
 func configureAPIStub(c *cli.Context) {
 	mock_api.Configure(
@@ -254,7 +284,7 @@ func finalizeEventStore(store events.EventStore) {
 }
 
 // insert a configuration event
-func configureMain(ctx context.Context, retries int, timeout float64) error {
+func configureMain(ctx context.Context, externalUUID uuid.UUID, retries int, timeout float64) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
@@ -266,7 +296,7 @@ func configureMain(ctx context.Context, retries int, timeout float64) error {
 		Timeout: timeout,
 	}
 
-	envelope, err := store.Insert(ctx, event, 0)
+	envelope, err := store.Insert(ctx, externalUUID, event, 0)
 	if err != nil {
 		return err
 	}
@@ -276,7 +306,7 @@ func configureMain(ctx context.Context, retries int, timeout float64) error {
 }
 
 // insert a new event
-func insertMain(ctx context.Context, class string, data string, causation string) error {
+func insertMain(ctx context.Context, class string, data string, externalUUID uuid.UUID, causation string) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
@@ -305,7 +335,7 @@ func insertMain(ctx context.Context, class string, data string, causation string
 	}
 
 	// insert a document
-	envelope, err := store.Insert(ctx, event, causationID)
+	envelope, err := store.Insert(ctx, externalUUID, event, causationID)
 	if err != nil {
 		return err
 	}
@@ -342,6 +372,7 @@ func listMain(ctx context.Context, lastProcessed string) error {
 		logger.Info(
 			"event",
 			"id", envelope.ID(),
+			"external_uuid", envelope.ExternalUUID(),
 			"class", envelope.Event().Class(),
 			"created", envelope.Created().Format(time.RFC3339),
 			"causation_id", envelope.CausationID(),
