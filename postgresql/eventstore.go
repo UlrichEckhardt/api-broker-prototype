@@ -45,12 +45,12 @@ type postgreSQLEnvelope struct {
 	EventVal       events.Event
 }
 
-// ID implements the EventStore interface.
+// ID implements the Envelope interface.
 func (env *postgreSQLEnvelope) ID() int32 {
 	return env.IDVal
 }
 
-// Created implements the EventStore interface.
+// Created implements the Envelope interface.
 func (env *postgreSQLEnvelope) Created() time.Time {
 	return env.CreatedVal
 }
@@ -61,12 +61,12 @@ func (env *postgreSQLEnvelope) ExternalUUID() uuid.UUID {
 	return uuid.Nil
 }
 
-// CausationID implements the EventStore interface.
+// CausationID implements the Envelope interface.
 func (env *postgreSQLEnvelope) CausationID() int32 {
 	return env.CausationIDVal
 }
 
-// Event implements the EventStore interface.
+// Event implements the Envelope interface.
 func (env *postgreSQLEnvelope) Event() events.Event {
 	return env.EventVal
 }
