@@ -178,6 +178,22 @@ func main() {
 				},
 			},
 			{
+				Name:      "resolve-external-uuid",
+				Usage:     "resolve a UUID to the according internal ID",
+				ArgsUsage: "<external UUID>",
+				Action: func(c *cli.Context) error {
+					args := c.Args()
+					if args.Len() != 1 {
+						return errors.New("exactly one argument expected")
+					}
+					externalUUID, err := parseUUID(args.Get(0))
+					if err != nil {
+						return err
+					}
+					return resolveExternalUUIDMain(c.Context, externalUUID)
+				},
+			},
+			{
 				Name:      "watch",
 				Usage:     "Watch notifications from the store.",
 				ArgsUsage: " ", // no arguments expected
@@ -407,6 +423,24 @@ func processMain(ctx context.Context, startAfter string) error {
 	}
 
 	return handler.Run(ctx, startAfterID)
+}
+
+// resolve an event's external UUID to the according internal ID
+func resolveExternalUUIDMain(ctx context.Context, externalUUID uuid.UUID) error {
+	store, err := initEventStore()
+	if err != nil {
+		return err
+	}
+	defer finalizeEventStore(store)
+
+	id, err := store.ResolveUUID(ctx, externalUUID)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("resolved UUID", "id", id)
+
+	return store.Error()
 }
 
 // watch stream of notifications
