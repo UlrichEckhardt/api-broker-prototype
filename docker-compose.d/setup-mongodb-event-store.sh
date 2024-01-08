@@ -9,6 +9,7 @@
 set -eu
 
 mongo --eval "db.createCollection('events')"
+mongo --eval 'db.events.createIndex({"external_uuid": 1}, {name: "unique_external_uuid_constraint", unique: true, partialFilterExpression: {external_uuid: { $type: "binData"}}})'
 mongo --eval "db.createCollection('notifications', {capped:true, size: 1000000})"
 # Create an event in the MongoDB "notifications" collection which is
 # necessary, because you can't wait on an empty capped collection. This
