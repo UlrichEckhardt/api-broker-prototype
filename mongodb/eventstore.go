@@ -241,17 +241,30 @@ func (s *MongoDBEventStore) Insert(ctx context.Context, externalUUID uuid.UUID, 
 		// insert new document
 		res, err := s.events.InsertOne(ctx, env)
 		if err != nil {
-			// Check if the next free ID changed. In that case,
-			// just try again with the new ID.
-			id := s.findNextID(ctx)
-			if id == 0 {
-				return nil, s.err
+			var write_exc mongo.WriteException
+			if !errors.As(err, &write_exc) {
+				return nil, err
 			}
-			if id != env.ID {
-				// retrying after race detection
-				env.ID = id
-				continue
+
+			// E11000 seems to be MongoDB's "duplicate key error", a unique
+			// constraint violation. We now only need to distinguish by the
+			// index that prevented the insert, the ID or the external UUID.
+			if write_exc.HasErrorCodeWithMessage(11000, "index: unique_external_uuid_constraint") {
+				return nil, events.DuplicateEventUUID
 			}
+			if write_exc.HasErrorCodeWithMessage(11000, "index: _id_") {
+				// The ID is already used, just generate a new one.
+				id := s.findNextID(ctx)
+				if id == 0 {
+					return nil, s.err
+				}
+				if id != env.ID {
+					// retrying with the new ID
+					env.ID = id
+					continue
+				}
+			}
+
 			return nil, err
 		}
 
