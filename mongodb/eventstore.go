@@ -346,7 +346,13 @@ func (s *MongoDBEventStore) ResolveUUID(ctx context.Context, externalUUID uuid.U
 		return 0, s.err
 	}
 
-	return int32(s.decodeEnvelope(res).ID()), s.err
+	// decode envelope from the document
+	envelope := s.decodeEnvelope(res)
+	if envelope == nil {
+		return 0, s.err
+	}
+
+	return envelope.ID(), nil
 }
 
 // find next free ID to use for an insert
