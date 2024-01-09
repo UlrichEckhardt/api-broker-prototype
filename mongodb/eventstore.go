@@ -12,15 +12,19 @@ import (
 	"api-broker-prototype/events"
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
+	"strconv"
+	"time"
 
 	"github.com/gofrs/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsoncodec"
+	"go.mongodb.org/mongo-driver/bson/bsonrw"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
-	"strconv"
-	"time"
 )
 
 // Common DB settings.
@@ -107,7 +111,58 @@ type MongoDBEventStore struct {
 	codecs        map[string]MongoDBEventCodec
 }
 
-// Connect to the two collections in the DB
+func buildTypeRegistry() *bsoncodec.Registry {
+	UUIDType := reflect.TypeOf(uuid.UUID{})
+
+	res := bson.NewRegistry()
+	res.RegisterTypeEncoder(
+		UUIDType,
+		bsoncodec.ValueEncoderFunc(
+			func(ec bsoncodec.EncodeContext, writer bsonrw.ValueWriter, value reflect.Value) error {
+				if value.Type() != UUIDType {
+					return bsoncodec.ValueEncoderError{Name: "UUIDCodec", Types: []reflect.Type{UUIDType}, Received: value}
+				}
+				uuid := value.Interface().(uuid.UUID)
+				return writer.WriteBinaryWithSubtype(uuid.Bytes(), bson.TypeBinaryUUID)
+			},
+		),
+	)
+	res.RegisterTypeDecoder(
+		UUIDType,
+		bsoncodec.ValueDecoderFunc(
+			func(ec bsoncodec.DecodeContext, reader bsonrw.ValueReader, value reflect.Value) error {
+				if !value.CanSet() || value.Type() != UUIDType {
+					return bsoncodec.ValueDecoderError{Name: "UUIDCodec", Types: []reflect.Type{UUIDType}, Received: value}
+				}
+
+				switch value_type := reader.Type(); value_type {
+				case bson.TypeBinary:
+					data, subtype, err := reader.ReadBinary()
+					if err != nil {
+						return err
+					}
+					if subtype != bson.TypeBinaryUUID {
+						return fmt.Errorf("unsupported binary subtype %v for UUID", subtype)
+					}
+					uuid, err := uuid.FromBytes(data)
+					if err != nil {
+						return err
+					}
+					value.Set(reflect.ValueOf(uuid))
+					return nil
+				case bson.TypeNull:
+					return reader.ReadNull()
+				case bson.TypeUndefined:
+					return reader.ReadUndefined()
+				default:
+					return fmt.Errorf("cannot decode %v into a UUID", value_type)
+				}
+			},
+		),
+	)
+
+	return res
+}
 
 // connect establishes an on-demand connection to the DB
 func (s *MongoDBEventStore) connect(ctx context.Context) {
@@ -118,6 +173,7 @@ func (s *MongoDBEventStore) connect(ctx context.Context) {
 
 	opts := options.
 		Client().
+		SetRegistry(buildTypeRegistry()).
 		ApplyURI("mongodb://" + s.host).
 		SetAppName(AppName).SetConnectTimeout(1 * time.Second)
 	if err := opts.Validate(); err != nil {
@@ -330,6 +386,7 @@ func (s *MongoDBEventStore) ResolveUUID(ctx context.Context, externalUUID uuid.U
 	}
 
 	// don't do anything if the error state of the store is set already
+	s.connect(ctx)
 	if s.err != nil {
 		return 0, s.err
 	}
@@ -345,7 +402,13 @@ func (s *MongoDBEventStore) ResolveUUID(ctx context.Context, externalUUID uuid.U
 		return 0, s.err
 	}
 
-	return int32(s.decodeEnvelope(res).ID()), s.err
+	// decode envelope from the document
+	envelope := s.decodeEnvelope(res)
+	if envelope == nil {
+		return 0, s.err
+	}
+
+	return envelope.ID(), nil
 }
 
 // find next free ID to use for an insert
