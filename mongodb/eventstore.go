@@ -330,6 +330,7 @@ func (s *MongoDBEventStore) ResolveUUID(ctx context.Context, externalUUID uuid.U
 	}
 
 	// don't do anything if the error state of the store is set already
+	s.connect(ctx)
 	if s.err != nil {
 		return 0, s.err
 	}
