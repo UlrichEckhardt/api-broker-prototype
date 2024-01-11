@@ -24,91 +24,13 @@ func Serve(ctx context.Context, store events.EventStore, port uint) error {
 
 	app := fiber.New()
 
-	app.Get("/up", func(ctx fiber.Ctx) error {
-		ctx.SendStatus(http.StatusOK)
-		ctx.SendString("GET /up")
-		return nil
-	})
-
-	app.Head("/up", func(ctx fiber.Ctx) error {
-		ctx.SendStatus(http.StatusOK)
-		ctx.SendString("HEAD /up")
-		return nil
-	})
-	app.Get("/echo/:val", func(ctx fiber.Ctx) error {
-		ctx.SendStatus(http.StatusOK)
-		ctx.SendString(ctx.Params("val"))
-		return nil
-	})
-
-	app.Get("/request/:external_uuid", func(ctx fiber.Ctx) error {
-		// extract external UUID from the path
-		external_uuid := uuid.FromStringOrNil(ctx.Params("external_uuid"))
-		if external_uuid == uuid.Nil {
-			ctx.SendStatus(http.StatusBadRequest)
-			ctx.SendString("Bad Request")
-			return nil
-		}
-
-		// convert UUID to internal ID
-		id, err := store.ResolveUUID(ctx.Context(), external_uuid)
-		if err != nil {
-			ctx.SendStatus(http.StatusNotFound)
-			ctx.SendString("failed to resolve external UUID")
-			return nil
-		}
-
-		// load event
-		envelope, err := store.RetrieveOne(ctx.Context(), id)
-		if err != nil {
-			ctx.SendStatus(http.StatusInternalServerError)
-			ctx.SendString("failed to load event")
-			return nil
-		}
-
-		response := newResponseDTO(envelope)
-		ctx.SendStatus(http.StatusOK)
-		ctx.JSON(response)
-		return nil;
-	})
-
-	app.Post("/request/:external_uuid", func(ctx fiber.Ctx) error {
-		// extract external UUID from the path
-		external_uuid := uuid.FromStringOrNil(ctx.Params("external_uuid"))
-		if external_uuid == uuid.Nil {
-			ctx.SendStatus(http.StatusBadRequest)
-			ctx.SendString("Bad Request")
-			return nil
-		}
-
-		// extract event from the body
-		request := requestDTO{}
-		if err := ctx.Bind().JSON(&request); err != nil {
-			ctx.SendStatus(http.StatusBadRequest)
-			ctx.SendString("Bad Request")
-			return nil
-		}
-
-		// insert event
-		envelope, err := store.Insert(ctx.Context(), external_uuid, request.asEvent(), 0)
-		if err != nil {
-			if err == events.DuplicateEventUUID {
-				ctx.SendStatus(http.StatusConflict)
-				ctx.SendString("Conflict")
-				return nil
-			}
-
-			ctx.SendStatus(http.StatusInternalServerError)
-			ctx.SendString("Internal Server Error")
-			return nil
-		}
-
-		response := newResponseDTO(envelope)
-		ctx.SendStatus(http.StatusCreated)
-		ctx.JSON(response)
-
-		return nil
-	})
+	ctrl := requestController{
+		store: store,
+	}
+	app.Get("/up", ctrl.up)
+	app.Head("/up", ctrl.up)
+	app.Get("/request/:external_uuid", ctrl.getRequest)
+	app.Post("/request/:external_uuid", ctrl.postRequest)
 
 	go app.Listen(fmt.Sprint(":", port))
 
@@ -118,6 +40,84 @@ func Serve(ctx context.Context, store events.EventStore, port uint) error {
 		app.Shutdown()
 		return ctx.Err()
 	}
+}
+
+type requestController struct {
+	store events.EventStore
+}
+
+func (ctrl *requestController) up(ctx fiber.Ctx) error {
+	ctx.SendStatus(http.StatusOK)
+	return nil
+}
+
+func (ctrl *requestController) getRequest(ctx fiber.Ctx) error {
+	// extract external UUID from the path
+	external_uuid := uuid.FromStringOrNil(ctx.Params("external_uuid"))
+	if external_uuid == uuid.Nil {
+		ctx.SendStatus(http.StatusBadRequest)
+		ctx.SendString("Bad Request")
+		return nil
+	}
+
+	// convert UUID to internal ID
+	id, err := ctrl.store.ResolveUUID(ctx.Context(), external_uuid)
+	if err != nil {
+		ctx.SendStatus(http.StatusNotFound)
+		ctx.SendString("failed to resolve external UUID")
+		return nil
+	}
+
+	// load event
+	envelope, err := ctrl.store.RetrieveOne(ctx.Context(), id)
+	if err != nil {
+		ctx.SendStatus(http.StatusInternalServerError)
+		ctx.SendString("failed to load event")
+		return nil
+	}
+
+	response := newResponseDTO(envelope)
+	ctx.SendStatus(http.StatusOK)
+	ctx.JSON(response)
+	return nil
+}
+
+func (ctrl *requestController) postRequest(ctx fiber.Ctx) error {
+	// extract external UUID from the path
+	external_uuid := uuid.FromStringOrNil(ctx.Params("external_uuid"))
+	if external_uuid == uuid.Nil {
+		ctx.SendStatus(http.StatusBadRequest)
+		ctx.SendString("Bad Request")
+		return nil
+	}
+
+	// extract event from the body
+	request := requestDTO{}
+	if err := ctx.Bind().JSON(&request); err != nil {
+		ctx.SendStatus(http.StatusBadRequest)
+		ctx.SendString("Bad Request")
+		return nil
+	}
+
+	// insert event
+	envelope, err := ctrl.store.Insert(ctx.Context(), external_uuid, request.asEvent(), 0)
+	if err != nil {
+		if err == events.DuplicateEventUUID {
+			ctx.SendStatus(http.StatusConflict)
+			ctx.SendString("Conflict")
+			return nil
+		}
+
+		ctx.SendStatus(http.StatusInternalServerError)
+		ctx.SendString("Internal Server Error")
+		return nil
+	}
+
+	response := newResponseDTO(envelope)
+	ctx.SendStatus(http.StatusCreated)
+	ctx.JSON(response)
+
+	return nil
 }
 
 // representation of the request during HTTP transfer
