@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/inconshreveable/log15 v2.16.0+incompatible
 	github.com/jackc/pgtype v1.14.0
-	github.com/jackc/pgx/v5 v5.5.1
+	github.com/jackc/pgx/v5 v5.5.4
 	github.com/urfave/cli/v2 v2.27.1
 	go.mongodb.org/mongo-driver v1.13.1
 )
