@@ -13,6 +13,19 @@ services:
     ports:
       - 8000:8000
 
+  bruno:
+    build: github.com/davidkarlsen/bruno-image:main
+    # set working dir to the directory with the test collection
+    working_dir: /tests
+    volumes:
+      # mount test collection into the container
+      - type: bind
+        source: ./bruno
+        target: /tests
+    profiles:
+      # set a profile to prevent this from being started by default
+      - bruno
+
   # Note: The broker doesn't start as a service here, it just runs the broker
   # executable once. This is rather a placeholder than an actual service.
   mongodb-broker:
