@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/inconshreveable/log15"
 	"github.com/urfave/cli/v2" // imports as package cli
@@ -94,6 +96,52 @@ func serveMain(ctx context.Context, failureRate float64, silentFailureRate float
 		w.WriteHeader(200)
 	})
 
+	http.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
+		logger.Info("handling /api request", "method", r.Method)
+
+		// only expect POST requests to this endpoint
+		if r.Method != "POST" {
+			w.WriteHeader(400)
+			return
+		}
+
+		// extract body as string
+		len := 100
+		buf := make([]byte, len)
+		n, err := r.Body.Read(buf[0:])
+		if n == 0 && err != nil {
+			w.WriteHeader(400)
+			return
+		}
+		body := string(buf[:n])
+
+		// add a random delay
+		delay := time.Duration((minLatency + rand.Float64()*(maxLatency-minLatency)) * float64(time.Second))
+		time.Sleep(delay)
+
+		if rand.Float64() >= failureRate {
+			// successful call
+
+			response := Reverse(body)
+			w.Write([]byte(response))
+
+			return
+		}
+
+		if rand.Float64() >= silentFailureRate {
+			// verbose failure
+			w.WriteHeader(503)
+
+			return
+		}
+
+		// silent failure
+		// Note that this doesn't cause a program termination, it is caught
+		// in the HTTP framework and only causes an empty answer and a
+		// closed connection. Yes, it's a bit hacky.
+		panic("failed request")
+	})
+
 	server := &http.Server{Addr: addr, Handler: nil}
 	go func() {
 		<-ctx.Done()
@@ -102,4 +150,12 @@ func serveMain(ctx context.Context, failureRate float64, silentFailureRate float
 	}()
 	logger.Info("listening for incoming connections", "addr", addr)
 	return server.ListenAndServe()
+}
+
+func Reverse(s string) string {
+	runes := []rune(s)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+	return string(runes)
 }
