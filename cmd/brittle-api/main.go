@@ -82,6 +82,18 @@ func main() {
 }
 
 func serveMain(ctx context.Context, failureRate float64, silentFailureRate float64, minLatency float64, maxLatency float64, addr string) error {
+	http.HandleFunc("/up", func(w http.ResponseWriter, r *http.Request) {
+		logger.Info("handling /up request", "method", r.Method)
+
+		// only expect GET and HEAD requests to this endpoint
+		if r.Method != "GET" && r.Method != "HEAD" {
+			w.WriteHeader(400)
+			return
+		}
+
+		w.WriteHeader(200)
+	})
+
 	server := &http.Server{Addr: addr, Handler: nil}
 	go func() {
 		<-ctx.Done()
