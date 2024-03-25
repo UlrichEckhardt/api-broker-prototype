@@ -20,17 +20,19 @@ jobs:
       run: |
         go get -v -t -d ./...
 
-    - name: Build
-      run: go build -v .
-
     - name: Format
-      run: go fmt ./... && git diff --quiet
+      run: |
+        go fmt ./...
+        git diff --quiet
 
     - name: Lint
       run: go vet ./...
 
     - name: Test
       run: go test -v ./...
+
+    - name: Build Broker
+      run: go build -C cmd/broker -v
 
 
   build-1_21:
@@ -51,17 +53,19 @@ jobs:
       run: |
         go get -v -t -d ./...
 
-    - name: Build
-      run: go build -v .
-
     - name: Format
-      run: go fmt ./... && git diff --quiet
+      run: |
+        go fmt ./...
+        git diff --quiet
 
     - name: Lint
       run: go vet ./...
 
     - name: Test
       run: go test -v ./...
+
+    - name: Build Broker
+      run: go build -C cmd/broker -v
 
 
   build-1_22:
@@ -82,9 +86,6 @@ jobs:
       run: |
         go get -v -t -d ./...
 
-    - name: Build
-      run: go build -v .
-
     - name: Format
       run: |
         go fmt ./...
@@ -95,3 +96,6 @@ jobs:
 
     - name: Test
       run: go test -v ./...
+
+    - name: Build Broker
+      run: go build -C cmd/broker -v

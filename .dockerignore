@@ -24,8 +24,8 @@ README.md
 # vendored Go packages
 vendor/
 
-# built executable
-api-broker-prototype
+# built executables
+cmd/broker/broker
 
 # local overrides for docker-compose.yml
 docker-compose.override.yml
