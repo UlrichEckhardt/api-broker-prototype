@@ -1,4 +1,18 @@
 services:
+  brittle-api:
+    build:
+      context: .
+      target: brittle-api
+    command:
+      - serve
+      - --api-failure-rate=0.5
+      - --api-silent-failure-rate=0.3
+      - --api-min-latency=1
+      - --api-max-latency=3
+      - :8000
+    ports:
+      - 8000:8000
+
   # Note: The broker doesn't start as a service here, it just runs the broker
   # executable once. This is rather a placeholder than an actual service.
   mongodb-broker:
