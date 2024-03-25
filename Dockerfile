@@ -15,7 +15,15 @@ RUN go mod download
 COPY . .
 
 # build executables statically
+RUN CGO_ENABLED=0 go build -C cmd/brittle-api
 RUN CGO_ENABLED=0 go build -C cmd/broker
+
+
+# start a new image, it will only contain the brittle-api executable
+FROM scratch AS brittle-api
+
+COPY --from=build /go/api-broker-prototype/cmd/brittle-api/brittle-api /
+ENTRYPOINT ["/brittle-api"]
 
 
 # start a new image, it will only contain the broker executable
