@@ -1,10 +1,10 @@
 package main
 
 import (
+	"api-broker-prototype/api"
 	"api-broker-prototype/broker"
 	"api-broker-prototype/events"
 	"api-broker-prototype/logging"
-	"api-broker-prototype/mock_api"
 	"api-broker-prototype/mongodb"
 	"api-broker-prototype/postgresql"
 	"context"
@@ -142,25 +142,10 @@ func main() {
 				Usage:     "Process events from the store.",
 				ArgsUsage: " ", // no arguments expected
 				Flags: []cli.Flag{
-					&cli.Float64Flag{
-						Name:  "api-failure-rate",
-						Value: 0.0,
-						Usage: "Fraction of API requests that fail.",
-					},
-					&cli.Float64Flag{
-						Name:  "api-silent-failure-rate",
-						Value: 0.0,
-						Usage: "Fraction of API requests that don't produce any response.",
-					},
-					&cli.Float64Flag{
-						Name:  "api-min-latency",
-						Value: 0.0,
-						Usage: "Minimal API latency.",
-					},
-					&cli.Float64Flag{
-						Name:  "api-max-latency",
-						Value: 0.0,
-						Usage: "Maximal API latency.",
+					&cli.StringFlag{
+						Name:  "api-url",
+						Value: "",
+						Usage: "URL of the remote API to connect to.",
 					},
 					&cli.StringFlag{
 						Name:  "start-after",
@@ -172,7 +157,9 @@ func main() {
 					if c.NArg() > 0 {
 						return errors.New("no arguments expected")
 					}
-					configureAPIStub(c)
+
+					// configure remote API
+					api.Configure(c.String("api-url"))
 
 					return processMain(c.Context, c.String("start-after"))
 				},
@@ -247,16 +234,6 @@ func parseUUID(arg string) (uuid.UUID, error) {
 	}
 
 	return uuid.FromString(arg)
-}
-
-// configure mock API from optional flags passed on the commandline
-func configureAPIStub(c *cli.Context) {
-	mock_api.Configure(
-		c.Float64("api-failure-rate"),
-		c.Float64("api-silent-failure-rate"),
-		c.Float64("api-min-latency"),
-		c.Float64("api-max-latency"),
-	)
 }
 
 func initEventStore() (events.EventStore, error) {
