@@ -62,10 +62,7 @@ services:
         condition: service_healthy
     command:
       - process
-      - --api-failure-rate=0.5
-      - --api-silent-failure-rate=0.3
-      - --api-min-latency=1
-      - --api-max-latency=3
+      - --api-url=http://brittle-api:8000
     environment:
       - EVENTSTORE_DRIVER=mongodb
       - EVENTSTORE_DB_HOST=mongodb
@@ -138,10 +135,7 @@ services:
         condition: service_healthy
     command:
       - process
-      - --api-failure-rate=0.5
-      - --api-silent-failure-rate=0.3
-      - --api-min-latency=1
-      - --api-max-latency=3
+      - --api-url=http://brittle-api:8000
     environment:
       - EVENTSTORE_DRIVER=postgresql
       - EVENTSTORE_DB_HOST=postgresql
