@@ -1,5 +1,3 @@
-version: '3.6'
-
 services:
   # Note: The broker doesn't start as a service here, it just runs the broker
   # executable once. This is rather a placeholder than an actual service.
