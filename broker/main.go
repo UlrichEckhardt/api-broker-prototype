@@ -1,8 +1,8 @@
 package broker
 
 import (
+	"api-broker-prototype/api"
 	"api-broker-prototype/events"
-	"api-broker-prototype/mock_api"
 	"context"
 	"time"
 
@@ -188,8 +188,8 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 
 	// TODO: this accesses `store` asynchronously, which may need synchronization
 	go func() {
-		// delegate to mock API
-		response, err := mock_api.ProcessRequest(event.Request)
+		// delegate to the API
+		response, err := api.ProcessRequest(event.Request)
 
 		// store results as event
 		if response != nil {
