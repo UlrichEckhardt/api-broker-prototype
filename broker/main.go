@@ -189,7 +189,7 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 	// TODO: this accesses `store` asynchronously, which may need synchronization
 	go func() {
 		// delegate to the API
-		response, err := api.ProcessRequest(event.Request)
+		response, err := api.ProcessRequest(ctx, event.Request)
 
 		// store results as event
 		if response != nil {

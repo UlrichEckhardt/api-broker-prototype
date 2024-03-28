@@ -3,6 +3,7 @@ package api
 // This file implements access to the exemplary "brittle-api"
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -22,10 +23,21 @@ func Configure(api_url string) {
 // Note that this can return an actual response, an error (when the HTTP
 // response doesn't have status 200) or neither. The latter is used to
 // mimick the behaviour of a remote API not responding at all.
-// TODO: `ctx context.Context` parameter
-func ProcessRequest(request string) (*string, error) {
+func ProcessRequest(ctx context.Context, request string) (*string, error) {
+	// assemble request
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		conf.api_url+"/api",
+		strings.NewReader(request),
+	)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
 	// delegate to API
-	response, err := http.Post(conf.api_url+"/api", "application/x-www-form-urlencoded", strings.NewReader(request))
+	response, err := http.DefaultClient.Do(req)
 	if err != nil {
 		// no response at all
 		return nil, nil
