@@ -25,6 +25,7 @@ README.md
 vendor/
 
 # built executables
+cmd/brittle-api/brittle-api
 cmd/broker/broker
 
 # local environment and overrides for docker-compose.yml
