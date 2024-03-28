@@ -260,8 +260,11 @@ func configureAPIStub(c *cli.Context) {
 }
 
 func initEventStore() (events.EventStore, error) {
-	loglevel, err := log15.LvlFromString(eventStoreLoglevel)
 	// setup log handler
+	loglevel, err := log15.LvlFromString(eventStoreLoglevel)
+	if err != nil {
+		return nil, err
+	}
 	handler := log15.LvlFilterHandler(loglevel, logger.GetHandler())
 
 	// setup logger for event store
