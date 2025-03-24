@@ -99,3 +99,34 @@ jobs:
 
     - name: Build Broker
       run: go build -C cmd/broker -v
+
+
+  build-1_23:
+    name: Build with Go 1.23
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go 1.23
+      uses: actions/setup-go@v1
+      with:
+        go-version: '1.23'
+      id: go
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - name: Get dependencies
+      run: go get -v -t ./...
+
+    - name: Format
+      run: |
+        go fmt ./...
+        git diff --quiet
+
+    - name: Lint
+      run: go vet ./...
+
+    - name: Test
+      run: go test -v ./...
+
+    - name: Build Broker
+      run: go build -C cmd/broker -v
