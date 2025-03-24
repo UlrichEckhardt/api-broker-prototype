@@ -23,7 +23,7 @@ jobs:
     - name: Format
       run: |
         go fmt ./...
-        git diff --quiet
+        git diff --exit-code
 
     - name: Lint
       run: go vet ./...
@@ -56,7 +56,7 @@ jobs:
     - name: Format
       run: |
         go fmt ./...
-        git diff --quiet
+        git diff --exit-code
 
     - name: Lint
       run: go vet ./...
@@ -89,7 +89,7 @@ jobs:
     - name: Format
       run: |
         go fmt ./...
-        git diff --quiet
+        git diff --exit-code
 
     - name: Lint
       run: go vet ./...
@@ -120,7 +120,7 @@ jobs:
     - name: Format
       run: |
         go fmt ./...
-        git diff --quiet
+        git diff --exit-code
 
     - name: Lint
       run: go vet ./...
@@ -151,7 +151,7 @@ jobs:
     - name: Format
       run: |
         go fmt ./...
-        git diff --quiet
+        git diff --exit-code
 
     - name: Lint
       run: go vet ./...
