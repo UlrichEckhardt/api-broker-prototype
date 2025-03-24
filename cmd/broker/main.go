@@ -1,10 +1,10 @@
 package main
 
 import (
+	"api-broker-prototype/api"
 	"api-broker-prototype/broker"
 	"api-broker-prototype/events"
 	"api-broker-prototype/logging"
-	"api-broker-prototype/mock_api"
 	"api-broker-prototype/mongodb"
 	"api-broker-prototype/postgresql"
 	"context"
@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/gofrs/uuid"
 	"github.com/inconshreveable/log15"
 	"github.com/urfave/cli/v2" // imports as package "cli"
 )
@@ -62,6 +63,11 @@ func main() {
 				Usage:     "Insert a configuration event into the store.",
 				ArgsUsage: " ",
 				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "external-uuid",
+						Value: "",
+						Usage: "external identifier for the request",
+					},
 					&cli.IntFlag{
 						Name:  "retries",
 						Value: -1,
@@ -77,7 +83,11 @@ func main() {
 					if c.NArg() > 0 {
 						return errors.New("no arguments expected")
 					}
-					return configureMain(c.Context, c.Int("retries"), c.Float64("timeout"))
+					externalUUID, err := parseUUID(c.String("external-uuid"))
+					if err != nil {
+						return err
+					}
+					return configureMain(c.Context, externalUUID, c.Int("retries"), c.Float64("timeout"))
 				},
 			},
 			{
@@ -85,6 +95,11 @@ func main() {
 				Usage:     "Insert an event into the store.",
 				ArgsUsage: "<event>",
 				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "external-uuid",
+						Value: "",
+						Usage: "external identifier for the request",
+					},
 					&cli.StringFlag{
 						Name:  "causation",
 						Value: "0",
@@ -96,7 +111,11 @@ func main() {
 					if args.Len() != 2 {
 						return errors.New("exactly two arguments expected")
 					}
-					return insertMain(c.Context, args.Get(0), args.Get(1), c.String("causation"))
+					externalUUID, err := parseUUID(c.String("external-uuid"))
+					if err != nil {
+						return err
+					}
+					return insertMain(c.Context, args.Get(0), args.Get(1), externalUUID, c.String("causation"))
 				},
 			},
 			{
@@ -123,25 +142,10 @@ func main() {
 				Usage:     "Process events from the store.",
 				ArgsUsage: " ", // no arguments expected
 				Flags: []cli.Flag{
-					&cli.Float64Flag{
-						Name:  "api-failure-rate",
-						Value: 0.0,
-						Usage: "Fraction of API requests that fail.",
-					},
-					&cli.Float64Flag{
-						Name:  "api-silent-failure-rate",
-						Value: 0.0,
-						Usage: "Fraction of API requests that don't produce any response.",
-					},
-					&cli.Float64Flag{
-						Name:  "api-min-latency",
-						Value: 0.0,
-						Usage: "Minimal API latency.",
-					},
-					&cli.Float64Flag{
-						Name:  "api-max-latency",
-						Value: 0.0,
-						Usage: "Maximal API latency.",
+					&cli.StringFlag{
+						Name:  "api-url",
+						Value: "",
+						Usage: "URL of the remote API to connect to.",
 					},
 					&cli.StringFlag{
 						Name:  "start-after",
@@ -153,9 +157,27 @@ func main() {
 					if c.NArg() > 0 {
 						return errors.New("no arguments expected")
 					}
-					configureAPIStub(c)
+
+					// configure remote API
+					api.Configure(c.String("api-url"))
 
 					return processMain(c.Context, c.String("start-after"))
+				},
+			},
+			{
+				Name:      "resolve-external-uuid",
+				Usage:     "resolve a UUID to the according internal ID",
+				ArgsUsage: "<external UUID>",
+				Action: func(c *cli.Context) error {
+					args := c.Args()
+					if args.Len() != 1 {
+						return errors.New("exactly one argument expected")
+					}
+					externalUUID, err := parseUUID(args.Get(0))
+					if err != nil {
+						return err
+					}
+					return resolveExternalUUIDMain(c.Context, externalUUID)
 				},
 			},
 			{
@@ -203,19 +225,23 @@ func main() {
 	}
 }
 
-// configure mock API from optional flags passed on the commandline
-func configureAPIStub(c *cli.Context) {
-	mock_api.Configure(
-		c.Float64("api-failure-rate"),
-		c.Float64("api-silent-failure-rate"),
-		c.Float64("api-min-latency"),
-		c.Float64("api-max-latency"),
-	)
+// parse a string to a UUID
+// Only a malformed string creates an error, an empty one will return a
+// nil UUID value.
+func parseUUID(arg string) (uuid.UUID, error) {
+	if arg == "" {
+		return uuid.Nil, nil
+	}
+
+	return uuid.FromString(arg)
 }
 
 func initEventStore() (events.EventStore, error) {
-	loglevel, err := log15.LvlFromString(eventStoreLoglevel)
 	// setup log handler
+	loglevel, err := log15.LvlFromString(eventStoreLoglevel)
+	if err != nil {
+		return nil, err
+	}
 	handler := log15.LvlFilterHandler(loglevel, logger.GetHandler())
 
 	// setup logger for event store
@@ -254,7 +280,7 @@ func finalizeEventStore(store events.EventStore) {
 }
 
 // insert a configuration event
-func configureMain(ctx context.Context, retries int, timeout float64) error {
+func configureMain(ctx context.Context, externalUUID uuid.UUID, retries int, timeout float64) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
@@ -266,7 +292,7 @@ func configureMain(ctx context.Context, retries int, timeout float64) error {
 		Timeout: timeout,
 	}
 
-	envelope, err := store.Insert(ctx, event, 0)
+	envelope, err := store.Insert(ctx, externalUUID, event, 0)
 	if err != nil {
 		return err
 	}
@@ -276,7 +302,7 @@ func configureMain(ctx context.Context, retries int, timeout float64) error {
 }
 
 // insert a new event
-func insertMain(ctx context.Context, class string, data string, causation string) error {
+func insertMain(ctx context.Context, class string, data string, externalUUID uuid.UUID, causation string) error {
 	store, err := initEventStore()
 	if err != nil {
 		return err
@@ -305,7 +331,7 @@ func insertMain(ctx context.Context, class string, data string, causation string
 	}
 
 	// insert a document
-	envelope, err := store.Insert(ctx, event, causationID)
+	envelope, err := store.Insert(ctx, externalUUID, event, causationID)
 	if err != nil {
 		return err
 	}
@@ -342,6 +368,7 @@ func listMain(ctx context.Context, lastProcessed string) error {
 		logger.Info(
 			"event",
 			"id", envelope.ID(),
+			"external_uuid", envelope.ExternalUUID(),
 			"class", envelope.Event().Class(),
 			"created", envelope.Created().Format(time.RFC3339),
 			"causation_id", envelope.CausationID(),
@@ -376,6 +403,24 @@ func processMain(ctx context.Context, startAfter string) error {
 	}
 
 	return handler.Run(ctx, startAfterID)
+}
+
+// resolve an event's external UUID to the according internal ID
+func resolveExternalUUIDMain(ctx context.Context, externalUUID uuid.UUID) error {
+	store, err := initEventStore()
+	if err != nil {
+		return err
+	}
+	defer finalizeEventStore(store)
+
+	id, err := store.ResolveUUID(ctx, externalUUID)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("resolved UUID", "id", id)
+
+	return store.Error()
 }
 
 // watch stream of notifications

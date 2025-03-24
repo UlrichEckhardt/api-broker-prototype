@@ -1,11 +1,12 @@
 package broker
 
 import (
+	"api-broker-prototype/api"
 	"api-broker-prototype/events"
-	"api-broker-prototype/mock_api"
 	"context"
 	"time"
 
+	"github.com/gofrs/uuid"
 	"github.com/inconshreveable/log15"
 )
 
@@ -157,6 +158,7 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 	// emit event that a request was started
 	handler.store.Insert(
 		ctx,
+		uuid.Nil,
 		APIRequestEvent{
 			Attempt: attempt,
 		},
@@ -171,6 +173,7 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 			func() {
 				_, err := handler.store.Insert(
 					ctx,
+					uuid.Nil,
 					APITimeoutEvent{
 						Attempt: attempt,
 					},
@@ -185,13 +188,14 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 
 	// TODO: this accesses `store` asynchronously, which may need synchronization
 	go func() {
-		// delegate to mock API
-		response, err := mock_api.ProcessRequest(event.Request)
+		// delegate to the API
+		response, err := api.ProcessRequest(ctx, event.Request)
 
 		// store results as event
 		if response != nil {
 			handler.store.Insert(
 				ctx,
+				uuid.Nil,
 				APIResponseEvent{
 					Attempt:  attempt,
 					Response: *response,
@@ -201,6 +205,7 @@ func (handler *RequestProcessor) startApiCall(ctx context.Context, request *requ
 		} else if err != nil {
 			handler.store.Insert(
 				ctx,
+				uuid.Nil,
 				APIFailureEvent{
 					Attempt: attempt,
 					Failure: err.Error(),

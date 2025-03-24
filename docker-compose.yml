@@ -1,10 +1,24 @@
-version: '3.6'
-
 services:
+  brittle-api:
+    build:
+      context: .
+      target: brittle-api
+    command:
+      - serve
+      - --api-failure-rate=0.5
+      - --api-silent-failure-rate=0.3
+      - --api-min-latency=1
+      - --api-max-latency=3
+      - :8000
+    ports:
+      - 8000:8000
+
   # Note: The broker doesn't start as a service here, it just runs the broker
   # executable once. This is rather a placeholder than an actual service.
   mongodb-broker:
-    build: .
+    build:
+      context: .
+      target: broker
     depends_on:
       mongodb:
         condition: service_healthy
@@ -40,16 +54,15 @@ services:
       - traefik.tcp.routers.mongodb.entrypoints=mongodb
 
   mongodb-processor:
-    build: .
+    build:
+      context: .
+      target: broker
     depends_on:
       mongodb:
         condition: service_healthy
     command:
       - process
-      - --api-failure-rate=0.5
-      - --api-silent-failure-rate=0.3
-      - --api-min-latency=1
-      - --api-max-latency=3
+      - --api-url=http://brittle-api:8000
     environment:
       - EVENTSTORE_DRIVER=mongodb
       - EVENTSTORE_DB_HOST=mongodb
@@ -57,7 +70,9 @@ services:
       - mongodb-storage
 
   mongodb-watcher:
-    build: .
+    build:
+      context: .
+      target: broker
     depends_on:
       mongodb:
         condition: service_healthy
@@ -72,7 +87,9 @@ services:
   # Note: The broker doesn't start as a service here, it just runs the broker
   # executable once. This is rather a placeholder than an actual service.
   postgresql-broker:
-    build: .
+    build:
+      context: .
+      target: broker
     depends_on:
       postgresql:
         condition: service_healthy
@@ -110,16 +127,15 @@ services:
       - traefik.tcp.routers.postgresql.entrypoints=postgresql
 
   postgresql-processor:
-    build: .
+    build:
+      context: .
+      target: broker
     depends_on:
       postgresql:
         condition: service_healthy
     command:
       - process
-      - --api-failure-rate=0.5
-      - --api-silent-failure-rate=0.3
-      - --api-min-latency=1
-      - --api-max-latency=3
+      - --api-url=http://brittle-api:8000
     environment:
       - EVENTSTORE_DRIVER=postgresql
       - EVENTSTORE_DB_HOST=postgresql
@@ -127,7 +143,9 @@ services:
       - postgresql-storage
 
   postgresql-watcher:
-    build: .
+    build:
+      context: .
+      target: broker
     depends_on:
       postgresql:
         condition: service_healthy

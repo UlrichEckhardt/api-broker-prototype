@@ -4,6 +4,8 @@ import (
 	"api-broker-prototype/events"
 	"testing"
 	"time"
+
+	"github.com/gofrs/uuid"
 )
 
 // mock for the events.Envelope interface
@@ -11,6 +13,10 @@ type envelopeMock struct{}
 
 func (envelope envelopeMock) ID() int32 {
 	return 42
+}
+
+func (envelope envelopeMock) ExternalUUID() uuid.UUID {
+	return uuid.FromStringOrNil("22428f46-a2d8-4d51-b6b5-bc8551bd0921")
 }
 
 func (envelope envelopeMock) Created() time.Time {

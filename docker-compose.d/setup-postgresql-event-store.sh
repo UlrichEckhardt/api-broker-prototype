@@ -11,6 +11,7 @@ set -eu
 psql -U postgres --no-readline --echo-all --echo-hidden --expanded <<EOF
 CREATE TABLE events (
     id SERIAL PRIMARY KEY,
+    external_uuid UUID UNIQUE,
     created timestamp NOT NULL,
     causation_id INTEGER NOT NULL,
     class TEXT NOT NULL,
